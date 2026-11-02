@@ -54,7 +54,7 @@ const (
 	RuleShield      AttackRule = "block-with-shield"
 	RuleShoot       AttackRule = "shoot-or-trigger"
 	RuleWarning     AttackRule = "warning-only"
-	RuleHarmless    AttackRule = "harmless"
+	RuleHarmless    AttackRule = "harmless"\n\tRuleUnknown     AttackRule = "unknown"
 )
 
 // ClassRule returns the documented contact rule for an attack class.
