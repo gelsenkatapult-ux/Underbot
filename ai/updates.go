@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"math/rand"
+	"time"
 
 	"github.com/pkg/errors"
 	"gitlab.com/256/Underbot/ai/pathfinding"
@@ -217,15 +218,27 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	// Calculate which tile Frisk is in
 
 	currentTile := pathfinding.GetCurrentTile(image.Point{averageX, averageY})
-	_, err = pathfinding.GetPath(currentTile, pathfinding.GetGoal())
+	path, err := pathfinding.GetPath(currentTile, pathfinding.GetGoal())
 	if err != nil {
 		return errors.Wrap(err, "failed to generate path")
 	}
-	/*
-		for _, pathTile := range path {
-
+	// Follow one tile at a time. Short key holds allow the next frame to
+	// re-evaluate the screen instead of committing to a long blind movement.
+	if len(path) > 1 {
+		target := rect.RectangleCenter(path[1].Rectangle)
+		dx, dy := target.X-averageX, target.Y-averageY
+		key := ""
+		if abs(dx) >= abs(dy) {
+			if dx > 0 { key = "right" } else if dx < 0 { key = "left" }
+		} else {
+			if dy > 0 { key = "down" } else if dy < 0 { key = "up" }
 		}
-	*/
+		if key != "" {
+			if err := pressFor(win, key, 90*time.Millisecond); err != nil {
+				return errors.Wrapf(err, "failed to move %s toward the next path tile", key)
+			}
+		}
+	}
 	if GridShow {
 		for _, tile := range tiles {
 			rect.DrawRectangle(img, tile.Color, tile.Rectangle)
@@ -323,4 +336,19 @@ func contains(s []object.RecognizableObject, e object.RecognizableObject) bool {
 		}
 	}
 	return false
+}
+
+
+// pressFor holds a direction briefly when the platform backend supports it.
+// Other backends retain their existing single-press behavior.
+func pressFor(win sys.Window, key string, duration time.Duration) error {
+	if held, ok := win.(interface { PressFor(string, time.Duration) error }); ok {
+		return held.PressFor(key, duration)
+	}
+	return win.Press(key)
+}
+
+func abs(value int) int {
+	if value < 0 { return -value }
+	return value
 }
