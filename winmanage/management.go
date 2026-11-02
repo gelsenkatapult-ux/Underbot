@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-vgo/robotgo"
 	"github.com/pkg/errors"
 	"gitlab.com/256/Underbot/sys"
 )
@@ -68,12 +67,3 @@ func getWinID(serv sys.Server) (sys.Window, error) {
 	return serv.ActiveWindow()
 }
 
-// Stalls until the left mouse button is pressed
-func waitForSelect() error {
-	ctrl := robotgo.AddEvent("shift")
-	mleft := robotgo.AddEvent("mleft")
-	if ctrl == 0 && mleft == 0 {
-		return nil
-	}
-	return errors.New("ctrl and mleft was not 0")
-}
