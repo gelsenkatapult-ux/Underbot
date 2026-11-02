@@ -86,5 +86,5 @@ var States = []State{
 	// The screen where you can choose to "Save" or "Return" at a checkpoint
 	NewState("saveScreen", saveScreenSigns, emptyObjects, SaveUpdate, -1),
 	// After pressing fight, when z needs to be pressed with good timing
-	NewState("attackGoal", attackGoalSigns, emptyObjects, BattleMenuUpdate, -1),
+	NewState("attackGoal", attackGoalSigns, emptyObjects, AttackGoalUpdate, -1),
 }
