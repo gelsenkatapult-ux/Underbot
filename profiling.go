@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"runtime/pprof"
 
@@ -15,7 +14,6 @@ var memprofile = flag.String("memprofile", "", "write memory profile to this fil
 
 // HandleProfiling is the introduction function for all profiling related functionality
 func HandleProfiling() error {
-	fmt.Println("wtf")
 	flag.Parse()
 	if *cpuprofile != "" {
 		err := cpuProfile()
@@ -36,11 +34,12 @@ func HandleProfiling() error {
 
 // Handles situation if cpu profiling is enabled
 func cpuProfile() error {
-	f, err := os.Create(*cpuprofile)
+	var err error
+	cpuFile, err = os.Create(*cpuprofile)
 	if err != nil {
 		return errors.Wrap(err, "failed to create specified cpu profile file")
 	}
-	err = pprof.StartCPUProfile(f)
+	err = pprof.StartCPUProfile(cpuFile)
 	if err != nil {
 		return errors.Wrap(err, "failed to start cpu profiling")
 	}
@@ -49,6 +48,7 @@ func cpuProfile() error {
 }
 
 var memFile *os.File
+var cpuFile *os.File
 
 // Handles situation if memory profiling is enabled
 func ramProfile() error {
