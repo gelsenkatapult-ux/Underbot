@@ -331,6 +331,27 @@ jobs:
           # when OpenCV binaries are restored from cache without source trees.
           Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/opencv/opencv/3.4.2/LICENSE' -OutFile dist\licenses\OpenCV-LICENSE.txt
           Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/opencv/opencv_contrib/3.4.2/LICENSE' -OutFile dist\licenses\OpenCV-Contrib-LICENSE.txt
+          # Retain the upstream license and notice files for every Go module
+          # included in the executable's dependency graph.
+          $moduleLines = go list -mod=mod -m -f '{{if not .Main}}{{.Path}}|{{.Dir}}{{end}}' all
+          if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate Go modules for third-party license packaging.' }
+          $moduleLicenseDir = 'dist\licenses\go-modules'
+          New-Item -ItemType Directory -Force $moduleLicenseDir | Out-Null
+          $copiedModuleLicenses = 0
+          foreach ($line in $moduleLines) {
+            if (-not $line -or -not $line.Trim()) { continue }
+            $parts = $line -split '\|', 2
+            if ($parts.Count -ne 2 -or -not (Test-Path -LiteralPath $parts[1])) { continue }
+            $moduleName = $parts[0] -replace '[^A-Za-z0-9._-]', '_'
+            $licenseFiles = Get-ChildItem -LiteralPath $parts[1] -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match '^(LICENSE|COPYING|NOTICE)(\.|$|-)' }
+            foreach ($licenseFile in $licenseFiles) {
+              Copy-Item -LiteralPath $licenseFile.FullName -Destination (Join-Path $moduleLicenseDir "$moduleName-$($licenseFile.Name)") -Force
+              $copiedModuleLicenses++
+            }
+          }
+          if ($copiedModuleLicenses -eq 0) { throw 'No upstream Go module license files were collected.' }
+          "Collected $copiedModuleLicenses upstream Go module license/notice files." | Set-Content -LiteralPath dist\licenses\GO-MODULE-NOTICES.txt -Encoding utf8
           @'
           Underbot for Windows (64-bit)
 
