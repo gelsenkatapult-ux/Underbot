@@ -64,11 +64,12 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 
 	targetIndex := 0
 	if PacifistMode {
-		mercyHighlighted := false
-		if len(options) >= 4 {
-			mercyHighlighted = hasYellowMenuText(img, options[len(options)-1].Parent.Bounds)
+		if isMainBattleMenu(options) {
+			mercyHighlighted := hasYellowMenuText(img, options[len(options)-1].Parent.Bounds)
+			targetIndex = pacifistOptionIndex(len(options), mercyHighlighted)
+		} else {
+			targetIndex = 0
 		}
-		targetIndex = pacifistOptionIndex(len(options), mercyHighlighted)
 	}
 	target := rect.RectangleCenter(options[targetIndex].Parent.Bounds)
 	player := rect.RectangleCenter(heart.Bounds)
