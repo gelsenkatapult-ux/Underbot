@@ -104,11 +104,19 @@ func (p ProjectileTrack) Predict(elapsed time.Duration) image.Rectangle {
 
 type dodgeCandidate struct { dx, dy int }
 
-// ChooseDodge evaluates short movement candidates against predicted projectile
-// rectangles. It returns a relative displacement, not a keypress. The caller
-// must still respect the battle-box bounds and movement mode.
+// ChooseDodge evaluates short movement candidates against predicted damaging
+// white projectiles. Other colors have different Undertale mechanics (for
+// example, light-blue requires staying still and gray is harmless), so they
+// must not be treated as generic collision hazards here. It returns a relative
+// displacement, not a keypress. The caller must enforce SOUL-mode constraints.
 func ChooseDodge(player, board image.Rectangle, tracks []ProjectileTrack, horizon time.Duration, margin int) (image.Point, bool) {
 	if player.Empty() || board.Empty() || horizon <= 0 { return image.Point{}, false }
+	var hazards []ProjectileTrack
+	for _, track := range tracks {
+		if ClassRule(track.Class) == RuleDodge {
+			hazards = append(hazards, track)
+		}
+	}
 	candidates := []dodgeCandidate{
 		{0, 0}, {0, -24}, {24, 0}, {0, 24}, {-24, 0},
 		{17, -17}, {17, 17}, {-17, 17}, {-17, -17},
@@ -127,7 +135,7 @@ func ChooseDodge(player, board image.Rectangle, tracks []ProjectileTrack, horizo
 			fraction := float64(step) / float64(steps)
 			playerAt := translateRect(player, int(math.Round(float64(candidate.dx)*fraction)), int(math.Round(float64(candidate.dy)*fraction)))
 			elapsed := time.Duration(float64(horizon) * fraction)
-			for _, projectile := range tracks {
+			for _, projectile := range hazards {
 				projectileAt := projectile.Predict(elapsed)
 				distance := rectDistance(playerAt, projectileAt, margin)
 				if distance == 0 { collision = true; break }
@@ -136,7 +144,7 @@ func ChooseDodge(player, board image.Rectangle, tracks []ProjectileTrack, horizo
 			if collision { break }
 		}
 		if collision { continue }
-		if len(tracks) == 0 { minDistance = 1 }
+		if len(hazards) == 0 { minDistance = 1 }
 		// Prefer the clearest path; break ties by avoiding unnecessary movement.
 		score := minDistance - math.Hypot(float64(candidate.dx), float64(candidate.dy))*0.01
 		if score > bestScore { bestScore, best, found = score, image.Pt(candidate.dx, candidate.dy), true }
