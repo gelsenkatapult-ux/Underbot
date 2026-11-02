@@ -8,86 +8,59 @@ import (
 	"gitlab.com/256/Underbot/cv/object"
 )
 
-// CenterColor gets the color of the pixel in the middle of an image
 func CenterColor(tmpImg image.Image) (color.Color, error) {
-	// Gets the underlying type of RGBA which supports At()
 	img, ok := tmpImg.(*image.RGBA)
-	if !ok {
-		return nil, errors.New("the underlying image is not of type image.RGBA")
-	}
-	centerPoint := RectangleCenter(img.Rect)
+	if !ok { return nil, errors.New("the underlying image is not of type image.RGBA") }
+	if img.Bounds().Empty() { return nil, errors.New("cannot get the center color of an empty image") }
+	centerPoint := RectangleCenter(img.Bounds())
 	return img.At(centerPoint.X, centerPoint.Y), nil
 }
 
-// RectangleCenter finds the point in the middle of a rectangle
-func RectangleCenter(rect image.Rectangle) (point image.Point) {
-	point.X = (rect.Min.X + rect.Max.X) / 2
-	point.Y = (rect.Min.Y + rect.Max.Y) / 2
-	return point
+func RectangleCenter(bounds image.Rectangle) image.Point {
+	return image.Pt((bounds.Min.X+bounds.Max.X)/2, (bounds.Min.Y+bounds.Max.Y)/2)
 }
 
-// DrawObject is a wrapper for the DrawRectangle function for objects
-func DrawObject(img *image.RGBA, color color.Color, obj object.Object) {
-	DrawRectangle(img, color, obj.Bounds)
+func DrawObject(img *image.RGBA, col color.Color, obj object.Object) {
+	DrawRectangle(img, col, obj.Bounds)
 }
 
-// DrawRectangle draws a rectangle using the specified color onto an image
-func DrawRectangle(img *image.RGBA, color color.Color, rect image.Rectangle) {
-	Rect(img, color, rect.Min.X, rect.Min.Y, rect.Max.X, rect.Max.Y)
+func DrawRectangle(img *image.RGBA, col color.Color, bounds image.Rectangle) {
+	if img == nil || bounds.Empty() { return }
+	Rect(img, col, bounds.Min.X, bounds.Min.Y, bounds.Max.X-1, bounds.Max.Y-1)
 }
 
-// GetRectangle creates a rectangle around a cluster of points
+// GetRectangle creates the smallest half-open rectangle containing all points.
 func GetRectangle(points []image.Point) image.Rectangle {
-	topLeftX := 0
-	topLeftY := 0
-	bottomRightX := 0
-	bottomRightY := 0
-	for i, point := range points {
-		if i == 0 {
-			bottomRightX = point.X
-			bottomRightY = point.Y
-			topLeftX = point.X
-			topLeftY = point.Y
-		}
-		if point.X > bottomRightX {
-			bottomRightX = point.X
-		}
-		if point.X < topLeftX {
-			topLeftX = point.X
-		}
-		if point.Y < topLeftY {
-			topLeftY = point.Y
-		}
-		if point.Y > bottomRightY {
-			bottomRightY = point.Y
-		}
+	if len(points) == 0 { return image.Rectangle{} }
+	minX, minY := points[0].X, points[0].Y
+	maxX, maxY := minX, minY
+	for _, point := range points[1:] {
+		if point.X < minX { minX = point.X }
+		if point.Y < minY { minY = point.Y }
+		if point.X > maxX { maxX = point.X }
+		if point.Y > maxY { maxY = point.Y }
 	}
-	return image.Rect(topLeftX, topLeftY, bottomRightX, bottomRightY)
+	return image.Rect(minX, minY, maxX+1, maxY+1)
 }
 
-// HLine draws a horizontal line
 func HLine(img *image.RGBA, col color.Color, x1, y, x2 int) {
-	for ; x1 <= x2; x1++ {
-		img.Set(x1, y, col)
-	}
+	if img == nil || y < img.Rect.Min.Y || y >= img.Rect.Max.Y { return }
+	for x := x1; x <= x2; x++ { img.Set(x, y, col) }
 }
 
-// VLine draws a vertical line
 func VLine(img *image.RGBA, col color.Color, x, y1, y2 int) {
-	for ; y1 <= y2; y1++ {
-		img.Set(x, y1, col)
-	}
+	if img == nil || x < img.Rect.Min.X || x >= img.Rect.Max.X { return }
+	for y := y1; y <= y2; y++ { img.Set(x, y, col) }
 }
 
-// Rect draws a rectangle utilizing HLine() and VLine()
 func Rect(img *image.RGBA, col color.Color, x1, y1, x2, y2 int) {
+	if x2 < x1 || y2 < y1 { return }
 	HLine(img, col, x1, y1, x2)
 	HLine(img, col, x1, y2, x2)
 	VLine(img, col, x1, y1, y2)
 	VLine(img, col, x2, y1, y2)
 }
 
-// AverageSize gets the average of the height and width of the rectangle
-func AverageSize(rect image.Rectangle) int {
-	return (rect.Dx() + rect.Dy()) / 2
+func AverageSize(bounds image.Rectangle) int {
+	return (bounds.Dx() + bounds.Dy()) / 2
 }
