@@ -9,6 +9,7 @@ import (
 	"image"
 	"os"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"gitlab.com/256/Underbot/sys"
@@ -276,6 +277,38 @@ func (w window) Press(key string) error {
 	inputs := []keyboardInput{{Type: inputKeyboard, Ki: keybdInput{Vk: vk}}, {Type: inputKeyboard, Ki: keybdInput{Vk: vk, Flags: keyeventKeyup}}}
 	sent, _, callErr := procSendInput.Call(uintptr(len(inputs)), uintptr(unsafe.Pointer(&inputs[0])), unsafe.Sizeof(inputs[0]))
 	if sent != uintptr(len(inputs)) { return fmt.Errorf("SendInput sent %d of %d keyboard events: %v", sent, len(inputs), callErr) }
+	return nil
+}
+
+// PressFor holds a supported key for the requested duration and always releases it.
+func (w window) PressFor(key string, duration time.Duration) error {
+	if err := w.valid(); err != nil { return err }
+	var vk uint16
+	switch key {
+	case "z": vk = 'Z'
+	case "x": vk = 'X'
+	case "up": vk = 0x26
+	case "down": vk = 0x28
+	case "left": vk = 0x25
+	case "right": vk = 0x27
+	case "enter": vk = virtualKeyEnter
+	default: return fmt.Errorf("unsupported key %q", key)
+	}
+	if duration <= 0 { return w.Press(key) }
+	foreground, _, _ := procGetForegroundWindow.Call()
+	if foreground != w.hwnd {
+		if err := w.SetActive(); err != nil { return err }
+	}
+	down := keyboardInput{Type: inputKeyboard, Ki: keybdInput{Vk: vk}}
+	up := keyboardInput{Type: inputKeyboard, Ki: keybdInput{Vk: vk, Flags: keyeventKeyup}}
+	sent, _, callErr := procSendInput.Call(1, uintptr(unsafe.Pointer(&down)), unsafe.Sizeof(down))
+	if sent != 1 { return fmt.Errorf("SendInput could not press %q: %v", key, callErr) }
+	milliseconds := duration.Milliseconds()
+	if milliseconds < 1 { milliseconds = 1 }
+	if milliseconds > int64(^uint32(0)) { milliseconds = int64(^uint32(0)) }
+	procSleep.Call(uintptr(uint32(milliseconds)))
+	sent, _, callErr = procSendInput.Call(1, uintptr(unsafe.Pointer(&up)), unsafe.Sizeof(up))
+	if sent != 1 { return fmt.Errorf("SendInput could not release %q: %v", key, callErr) }
 	return nil
 }
 
