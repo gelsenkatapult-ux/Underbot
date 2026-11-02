@@ -89,43 +89,73 @@ func DialogueUpdate(objects []object.Object, win sys.Window, img *image.RGBA) er
 	return nil
 }
 
-// InBattleUpdate is the function run every frame when dialogue is detected
+// InBattleUpdate performs conservative reactive dodging inside the arena.
+// The recognized soul colour determines whether arrow input moves the soul or
+// turns the green-heart shield. Unknown/missed hazards never trigger random
+// movement.
 func InBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
-	heartObjects, err := GetWanted(objects, append([]object.RecognizableObject{}, object.Hearts...))
-	if len(heartObjects) == 0 {
-		// Stall until items can be found
+
+	var heart *object.Object
+	heartName := ""
+	var arena image.Rectangle
+	for i := range objects {
+		candidate := &objects[i]
+		if !candidate.Recognized {
+			continue
+		}
+		switch candidate.RecogObj.Type.Name {
+		case "redHeart", "greenHeart", "blueHeart":
+			if heart == nil {
+				heart = candidate
+				heartName = candidate.RecogObj.Type.Name
+			}
+		case "fightBox":
+			if arena.Empty() {
+				arena = candidate.Bounds
+			}
+		}
+	}
+
+	if heart == nil || arena.Empty() || arena.Dx() < 40 || arena.Dy() < 40 {
 		failedRetrieval++
-		// If stalling takes too long, then try to get unstuck
 		if failedRetrieval > params.FailedLimit {
-			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-			unstuck(win)
+			fmt.Println("The AI cannot identify the battle arena or player soul. Holding position.")
+			failedRetrieval = 0
 		}
 		return nil
 	}
 	failedRetrieval = 0
 
-	// Draw the tiles on the screen
-	tiles, err := pathfinding.MakeTiles(*img)
-	if err != nil {
-		return errors.Wrap(err, "failed to create the screen tiles")
+	player := rect.RectangleCenter(heart.Bounds)
+	hazards := findBattleHazards(objects, arena, heart.ID)
+	if len(hazards) == 0 {
+		return nil
 	}
 
-	// Calculate which tile Frisk is in
-
-	//currentTile := pathfinding.GetCurrentTile(image.Point{averageX, averageY})
-	//_, err = pathfinding.GetPath(currentTile, pathfinding.GetGoal())
-	if err != nil {
-		return errors.Wrap(err, "failed to generate path")
-	}
-	/*
-		for _, pathTile := range path {
-
+	var direction string
+	switch heartName {
+	case "greenHeart":
+		// The green soul cannot freely move; arrow input rotates its shield.
+		if nearestHazardDistance(player, hazards) <= battleDangerRadius+20 {
+			direction = nearestHazardDirection(player, hazards)
 		}
-	*/
+	case "redHeart", "blueHeart":
+		target := chooseSafeBattlePoint(arena, player, hazards)
+		if abs(target.X-player.X) > 4 || abs(target.Y-player.Y) > 4 {
+			direction = movementDirection(player, target)
+		}
+	}
+
+	if direction != "" {
+		if err := win.Press(direction); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("failed to dodge a detected battle hazard with %s", direction))
+		}
+	}
+
 	if GridShow {
-		for _, tile := range tiles {
-			rect.DrawRectangle(img, tile.Color, tile.Rectangle)
+		for _, hazard := range hazards {
+			rect.DrawRectangle(img, color.RGBA{R: 255, A: 255}, hazard.Bounds)
 		}
 	}
 	return nil
