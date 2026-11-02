@@ -158,7 +158,7 @@ func (w window) GetImage() (image.RGBA, error) {
 
 	pixels := make([]byte, width*height*4)
 	bmi := bitmapInfo{Header: bitmapInfoHeader{Size: uint32(unsafe.Sizeof(bitmapInfoHeader{})), Width: int32(width), Height: -int32(height), Planes: 1, BitCount: 32, Compression: biRGB}}
-	lines, _, _ := procGetDIBits.Call(memDC, bitmap, 0, uintptr(height), uintptr(unsafe.Pointer(&pixels[0])), uintptr(unsafe.Pointer(&bmi)), dibRGBColors)
+	lines, _, _ := procGetDIBits.Call(screenDC, bitmap, 0, uintptr(height), uintptr(unsafe.Pointer(&pixels[0])), uintptr(unsafe.Pointer(&bmi)), dibRGBColors)
 	if lines == 0 { return image.RGBA{}, errors.New("GetDIBits failed while converting the window image") }
 	for i := 0; i < len(pixels); i += 4 { pixels[i], pixels[i+2], pixels[i+3] = pixels[i+2], pixels[i], 255 }
 	return image.RGBA{Pix: pixels, Stride: width*4, Rect: image.Rect(0, 0, width, height)}, nil
