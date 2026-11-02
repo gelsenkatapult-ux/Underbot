@@ -150,11 +150,12 @@ func (w window) GetImage() (image.RGBA, error) {
 	if bitmap == 0 { return image.RGBA{}, errors.New("CreateCompatibleBitmap failed") }
 	defer procDeleteObject.Call(bitmap)
 	old, _, _ := procSelectObject.Call(memDC, bitmap)
-	defer procSelectObject.Call(memDC, old)
 	x, y, err := w.originAndSize()
 	if err != nil { return image.RGBA{}, err }
 	ok, _, _ := procBitBlt.Call(memDC, 0, 0, uintptr(width), uintptr(height), screenDC, uintptr(x), uintptr(y), srccopy)
 	if ok == 0 { return image.RGBA{}, errors.New("BitBlt failed while capturing the game window") }
+	// GetDIBits requires the bitmap not to be selected into a device context.
+	procSelectObject.Call(memDC, old)
 
 	pixels := make([]byte, width*height*4)
 	bmi := bitmapInfo{Header: bitmapInfoHeader{Size: uint32(unsafe.Sizeof(bitmapInfoHeader{})), Width: int32(width), Height: -int32(height), Planes: 1, BitCount: 32, Compression: biRGB}}
