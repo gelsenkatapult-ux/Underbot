@@ -84,3 +84,20 @@ func TestChooseDodgeStillAvoidsWhiteAttacks(t *testing.T) {
 	if !ok { t.Fatal("expected a safe candidate") }
 	if move == (image.Point{}) { t.Fatal("white damaging attack should trigger an evasive candidate") }
 }
+
+func TestTrackerDoesNotMergeDifferentAttackClasses(t *testing.T) {
+	tracker := NewTracker()
+	now := time.Unix(400, 0)
+	tracker.Update([]ProjectileObservation{{
+		Bounds: image.Rect(10, 10, 20, 20), Class: AttackWhite,
+	}}, now)
+	got := tracker.Update([]ProjectileObservation{{
+		Bounds: image.Rect(11, 10, 21, 20), Class: AttackOrange,
+	}}, now.Add(100*time.Millisecond))
+	if len(got) != 2 {
+		t.Fatalf("different classes should remain separate tracks, got %#v", got)
+	}
+	if got[0].ID == got[1].ID {
+		t.Fatal("different attack classes unexpectedly share a track ID")
+	}
+}
