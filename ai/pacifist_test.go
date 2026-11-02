@@ -81,13 +81,13 @@ func menuObject(id int, name string, bounds image.Rectangle) object.Object {
 }
 
 func TestBattleMenuSelectsACTOnFirstMainMenuTurn(t *testing.T) {
-	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuPending
+	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
 	PacifistMode = true
 	pacifistMainMenuTurns = 0
 	battleMenuCooldownFrames = 0
-	pacifistSubmenuPending = false
+	pacifistSubmenuStepsRemaining = 0
 	defer func() {
-		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuPending = oldMode, oldTurns, oldCooldown, oldPending
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldPending
 	}()
 
 	objects := []object.Object{
@@ -104,19 +104,19 @@ func TestBattleMenuSelectsACTOnFirstMainMenuTurn(t *testing.T) {
 	if len(window.keys) != 1 || window.keys[0] != "z" {
 		t.Fatalf("menu input = %v, want [z] to confirm ACT", window.keys)
 	}
-	if !pacifistSubmenuPending {
-		t.Fatal("confirming ACT did not record the pending submenu")
+	if pacifistSubmenuStepsRemaining != 2 {
+		t.Fatalf("confirming ACT set submenu steps to %d, want 2", pacifistSubmenuStepsRemaining)
 	}
 }
 
 func TestBattleMenuAlternatesToMercyAfterACTTurn(t *testing.T) {
-	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuPending
+	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
 	PacifistMode = true
 	pacifistMainMenuTurns = 1
 	battleMenuCooldownFrames = 0
-	pacifistSubmenuPending = false
+	pacifistSubmenuStepsRemaining = 0
 	defer func() {
-		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuPending = oldMode, oldTurns, oldCooldown, oldPending
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldPending
 	}()
 
 	objects := []object.Object{
@@ -133,18 +133,18 @@ func TestBattleMenuAlternatesToMercyAfterACTTurn(t *testing.T) {
 	if len(window.keys) != 1 || window.keys[0] != "z" {
 		t.Fatalf("menu input = %v, want [z] to confirm the scheduled MERCY attempt", window.keys)
 	}
-	if !pacifistSubmenuPending {
-		t.Fatal("confirming MERCY did not record the pending submenu")
+	if pacifistSubmenuStepsRemaining != 2 {
+		t.Fatalf("confirming MERCY set submenu steps to %d, want 2", pacifistSubmenuStepsRemaining)
 	}
 }
 
 func TestPacifistDoesNotConfirmAnIncompleteMainMenu(t *testing.T) {
-	oldMode, oldPending, oldCooldown := PacifistMode, pacifistSubmenuPending, battleMenuCooldownFrames
+	oldMode, oldPending, oldCooldown := PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames
 	PacifistMode = true
-	pacifistSubmenuPending = false
+	pacifistSubmenuStepsRemaining = 0
 	battleMenuCooldownFrames = 0
 	defer func() {
-		PacifistMode, pacifistSubmenuPending, battleMenuCooldownFrames = oldMode, oldPending, oldCooldown
+		PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames = oldMode, oldPending, oldCooldown
 	}()
 	objects := []object.Object{
 		menuObject(1, "battleOption", image.Rect(10, 10, 117, 49)),
@@ -160,13 +160,13 @@ func TestPacifistDoesNotConfirmAnIncompleteMainMenu(t *testing.T) {
 }
 
 func TestPacifistTextOnlySubmenuConfirmsOnlyWhenExpected(t *testing.T) {
-	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuPending
+	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
 	PacifistMode = true
 	pacifistMainMenuTurns = 1
 	battleMenuCooldownFrames = 0
-	pacifistSubmenuPending = true
+	pacifistSubmenuStepsRemaining = 1
 	defer func() {
-		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuPending = oldMode, oldTurns, oldCooldown, oldPending
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldPending
 	}()
 	objects := []object.Object{
 		menuObject(5, "redHeart", image.Rect(180, 80, 195, 95)),
@@ -176,10 +176,10 @@ func TestPacifistTextOnlySubmenuConfirmsOnlyWhenExpected(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(window.keys) != 1 || window.keys[0] != "z" {
-		t.Fatalf("expected submenu input = %v, want one Z for first (Spare) entry", window.keys)
+		t.Fatalf("first submenu input = %v, want one Z", window.keys)
 	}
-	if pacifistSubmenuPending {
-		t.Fatal("text-only submenu confirmation did not clear pending state")
+	if pacifistSubmenuStepsRemaining != 0 {
+		t.Fatalf("first text-only submenu left %d steps, want 0 in this one-step fixture", pacifistSubmenuStepsRemaining)
 	}
 	if battleMenuCooldownFrames == 0 {
 		t.Fatal("submenu confirmation did not set a cooldown")
@@ -187,12 +187,12 @@ func TestPacifistTextOnlySubmenuConfirmsOnlyWhenExpected(t *testing.T) {
 }
 
 func TestPacifistUnknownTextScreenDoesNotConfirm(t *testing.T) {
-	oldMode, oldPending, oldCooldown := PacifistMode, pacifistSubmenuPending, battleMenuCooldownFrames
+	oldMode, oldPending, oldCooldown := PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames
 	PacifistMode = true
-	pacifistSubmenuPending = false
+	pacifistSubmenuStepsRemaining = 0
 	battleMenuCooldownFrames = 0
 	defer func() {
-		PacifistMode, pacifistSubmenuPending, battleMenuCooldownFrames = oldMode, oldPending, oldCooldown
+		PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames = oldMode, oldPending, oldCooldown
 	}()
 	objects := []object.Object{menuObject(5, "redHeart", image.Rect(180, 80, 195, 95))}
 	window := &pacifistTestWindow{}
