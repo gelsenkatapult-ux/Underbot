@@ -61,6 +61,7 @@ const (
 	keyeventKeyup   = 0x0002
 	virtualKeyEnter = 0x0D
 	processSuspendResume = 0x0800
+	defaultKeyPressDuration = 40 * time.Millisecond
 )
 
 type winRect struct{ Left, Top, Right, Bottom int32 }
@@ -294,7 +295,7 @@ func (w window) Resume() error { return w.suspendOrResume(true) }
 func (w window) Press(key string) error {
 	vk, err := virtualKeyFor(key)
 	if err != nil { return err }
-	return w.pressVirtualKey(vk, 0)
+	return w.pressVirtualKey(vk, defaultKeyPressDuration)
 }
 
 // PressFor holds a supported key for the requested duration and always attempts
