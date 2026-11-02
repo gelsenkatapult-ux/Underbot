@@ -27,6 +27,26 @@ func TestIsMainBattleMenuUsesHorizontalFourButtonLayout(t *testing.T) {
 	}
 }
 
+func TestClosestMenuOptionIndexUsesCursorProximity(t *testing.T) {
+	options := []object.RecognizedObject{
+		{Parent: &object.Object{Bounds: image.Rect(10, 10, 110, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(150, 10, 250, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(290, 10, 390, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(430, 10, 530, 50)}},
+	}
+	// The heart is offset to the left of the currently selected option;
+	// it does not have to overlap that option's centre.
+	if got := closestMenuOptionIndex(options, image.Pt(140, 30)); got != 1 {
+		t.Fatalf("closestMenuOptionIndex = %d, want option 1", got)
+	}
+	if got := closestMenuOptionIndex(options, image.Pt(280, 30)); got != 2 {
+		t.Fatalf("closestMenuOptionIndex = %d, want option 2", got)
+	}
+	if got := closestMenuOptionIndex(nil, image.Pt(10, 10)); got != -1 {
+		t.Fatalf("closestMenuOptionIndex on empty list = %d, want -1", got)
+	}
+}
+
 func TestPacifistOptionIndex(t *testing.T) {
 	tests := []struct {
 		name       string
