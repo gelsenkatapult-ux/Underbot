@@ -20,11 +20,11 @@ var (
 )
 
 func pacifistOptionIndex(optionCount int, chooseMercy bool) int {
-	if optionCount >= 4 && chooseMercy {
-		return optionCount - 1 // MERCY is the final button in the main menu.
-	}
-	if optionCount >= 2 {
-		return 1 // ACT is second; safer than confirming the first (FIGHT) button.
+	if optionCount >= 4 {
+		if chooseMercy {
+			return optionCount - 1 // MERCY is the final button in the main menu.
+		}
+		return 1 // ACT is second; safer than confirming FIGHT.
 	}
 	return 0
 }
