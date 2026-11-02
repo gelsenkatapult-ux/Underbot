@@ -43,7 +43,7 @@ func TestPacifistOptionIndex(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if got := pacifistOptionIndex(test.count, test.chooseMercy); got != test.want {
-				t.Fatalf("pacifistOptionIndex(%d, %t) = %d, want %d", test.count, test.mercyHighlighted, got, test.want)
+				t.Fatalf("pacifistOptionIndex(%d, %t) = %d, want %d", test.count, test.chooseMercy, got, test.want)
 			}
 		})
 	}
