@@ -50,10 +50,10 @@ To prepare a Windows machine for the original application:
    ```powershell
    $env:CGO_ENABLED = '1'
    go mod download
-   go build -o Underbot.exe .
+   go build -mod=mod -o Underbot.exe .
    ```
 
-This Windows GUI build is not yet verified in CI because it needs the matching native OpenCV 3.4.2 libraries and a CGO-capable MinGW compiler. The automated workflow currently verifies the Win32 backend and its diagnostic tool, not the complete GUI. The current GoCV Windows installation page describes a newer GoCV/OpenCV combination; use it only as general toolchain background, not as a replacement for the versions pinned by this original source tree.
+The GitHub Actions workflow `.github/workflows/windows-full-build.yml` provisions the native toolchain, builds the pinned OpenCV 3.4.2 version, runs the Go tests, checks that GoCV can load the OpenCV runtime, builds the original GUI and packages the executable with its runtime DLLs. Its downloadable artifact is named `Underbot-Windows-x64`. Version tags beginning with `v` create a **draft** GitHub release after the full build succeeds; a maintainer must review and publish that draft. The manual build above remains useful for local development. The current GoCV Windows installation page describes a newer GoCV/OpenCV combination; use it only as general toolchain background, not as a replacement for the versions pinned by this original source tree.
 
 ## Port scope and gameplay status
 
