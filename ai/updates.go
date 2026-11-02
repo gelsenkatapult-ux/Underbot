@@ -23,6 +23,9 @@ func genUpdate() {
 	if interactionCooldownFrames > 0 {
 		interactionCooldownFrames--
 	}
+	if battleMenuCooldownFrames > 0 {
+		battleMenuCooldownFrames--
+	}
 }
 
 // BattleMenuUpdate selects a non-violent action by default. On the main
@@ -31,6 +34,9 @@ func genUpdate() {
 // conservative generic policy; enemy-specific ACT choices are not inferred.
 func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
+	if PacifistMode && battleMenuCooldownFrames > 0 {
+		return nil
+	}
 	options := make([]object.RecognizedObject, 0, 4)
 	var heart *object.Object
 	for i := range objects {
@@ -47,7 +53,19 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 			}
 		}
 	}
-	if heart == nil || len(options) == 0 {
+	if heart == nil {
+		return nil
+	}
+	if len(options) == 0 {
+		// Mercy/ACT submenus may be text-only and therefore have no button
+		// contours. Confirm their default first entry (Spare in MERCY) once,
+		// with a cooldown to avoid holding Z through the following attack.
+		if PacifistMode {
+			if err := win.Press("z"); err != nil {
+				return errors.Wrap(err, "couldn't confirm the first non-violent submenu entry")
+			}
+			battleMenuCooldownFrames = 25
+		}
 		return nil
 	}
 
@@ -62,14 +80,13 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		return left.Y < right.Y
 	})
 
+	mainMenu := isMainBattleMenu(options)
 	targetIndex := 0
-	if PacifistMode {
-		if isMainBattleMenu(options) {
-			mercyHighlighted := hasYellowMenuText(img, options[len(options)-1].Parent.Bounds)
-			targetIndex = pacifistOptionIndex(len(options), mercyHighlighted)
-		} else {
-			targetIndex = 0
-		}
+	if PacifistMode && mainMenu {
+		// Alternate between ACT and a Spare attempt. This makes progress on
+		// ordinary encounters without ever selecting FIGHT automatically.
+		chooseMercy := pacifistMainMenuTurns%2 == 1
+		targetIndex = pacifistOptionIndex(len(options), chooseMercy)
 	}
 	target := rect.RectangleCenter(options[targetIndex].Parent.Bounds)
 	player := rect.RectangleCenter(heart.Bounds)
@@ -85,6 +102,12 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 	}
 	if err := win.Press("z"); err != nil {
 		return errors.Wrap(err, "couldn't confirm the selected non-violent menu option")
+	}
+	if PacifistMode {
+		battleMenuCooldownFrames = 25
+		if mainMenu {
+			pacifistMainMenuTurns++
+		}
 	}
 	return nil
 }
@@ -240,6 +263,8 @@ var interactionCooldownFrames int
 // remains the fallback when no landmark can be seen.
 func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
+	pacifistMainMenuTurns = 0
+	battleMenuCooldownFrames = 0
 	friskObjects, _ := GetWanted(objects, object.Frisk)
 	if len(friskObjects) == 0 {
 		failedRetrieval++
