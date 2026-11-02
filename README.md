@@ -54,3 +54,19 @@ To prepare a Windows machine for the original application:
    ```
 
 This Windows GUI build is not yet verified in CI because it needs the matching native OpenCV 3.4.2 libraries and a CGO-capable MinGW compiler. The automated workflow currently verifies the Win32 backend and its diagnostic tool, not the complete GUI. The current GoCV Windows installation page describes a newer GoCV/OpenCV combination; use it only as general toolchain background, not as a replacement for the versions pinned by this original source tree.
+
+## Port scope and gameplay status
+
+The Windows branch is a platform port of the original project, not a replacement
+or completion of its game-playing logic. The original AI remains a prototype:
+outside battle it calculates a path but its movement-execution loop is still
+commented out; during enemy attack phases it builds the tile view but does not
+yet implement the movement/dodge controller. Battle interaction is limited to
+the original menu/dialogue/save handling.
+
+For that reason, a successful Windows build or backend smoke test must not be
+interpreted as proof that the bot can complete an entire Undertale run. This
+port preserves those original limitations deliberately rather than silently
+changing the game logic. The Windows release workflow validates compilation,
+repository tests, GoCV/OpenCV runtime loading and packaging; a full real-game
+playthrough remains a separate, currently unverified test.
