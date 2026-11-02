@@ -76,7 +76,7 @@ func ClassRule(class AttackClass) AttackRule {
 	case AttackYellow:
 		return RuleShoot
 	default:
-		return RuleDodge
+		return RuleUnknown
 	}
 }
 
