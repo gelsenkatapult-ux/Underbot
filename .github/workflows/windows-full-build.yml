@@ -275,6 +275,9 @@ jobs:
           func main() {
             fmt.Printf("GoCV version: %s\n", gocv.Version())
             fmt.Printf("OpenCV version: %s\n", gocv.OpenCVVersion())
+            if gocv.Version() != "0.14.0" {
+              panic("unexpected GoCV version")
+            }
             if gocv.OpenCVVersion() != "3.4.2" {
               panic("unexpected OpenCV runtime version")
             }
@@ -314,8 +317,11 @@ jobs:
             }
           }
           New-Item -ItemType Directory -Force dist\licenses | Out-Null
-          Copy-Item C:\opencv\opencv-3.4.2\LICENSE dist\licenses\OpenCV-LICENSE.txt
-          if (Test-Path C:\opencv\opencv_contrib-3.4.2\LICENSE) { Copy-Item C:\opencv\opencv_contrib-3.4.2\LICENSE dist\licenses\OpenCV-Contrib-LICENSE.txt }
+          Copy-Item LICENSE dist\licenses\Underbot-LICENSE.txt
+          # Fetch upstream license texts directly so packaging also works
+          # when OpenCV binaries are restored from cache without source trees.
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/opencv/opencv/3.4.2/LICENSE' -OutFile dist\licenses\OpenCV-LICENSE.txt
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/opencv/opencv_contrib/3.4.2/LICENSE' -OutFile dist\licenses\OpenCV-Contrib-LICENSE.txt
           @'
           Underbot for Windows (64-bit)
 
