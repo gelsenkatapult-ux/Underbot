@@ -33,13 +33,13 @@ var (
 	procNtSuspendProcess       = syscall.NewLazyDLL("ntdll.dll").NewProc("NtSuspendProcess")
 	procNtResumeProcess        = syscall.NewLazyDLL("ntdll.dll").NewProc("NtResumeProcess")
 	procSendInput              = user32.NewProc("SendInput")
+	procSleep                  = syscall.NewLazyDLL("kernel32.dll").NewProc("Sleep")
 	procGetDC                  = user32.NewProc("GetDC")
 	procReleaseDC              = user32.NewProc("ReleaseDC")
 	procCreateCompatibleDC     = gdi32.NewProc("CreateCompatibleDC")
 	procCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
 	procSelectObject           = gdi32.NewProc("SelectObject")
 	procBitBlt                 = gdi32.NewProc("BitBlt")
-	procPrintWindow            = user32.NewProc("PrintWindow")
 	procGetDIBits              = gdi32.NewProc("GetDIBits")
 	procDeleteObject           = gdi32.NewProc("DeleteObject")
 	procDeleteDC               = gdi32.NewProc("DeleteDC")
@@ -50,7 +50,6 @@ const (
 	swpNoZOrder     = 0x0004
 	swpNoActivate   = 0x0010
 	srccopy         = 0x00CC0020
-	pwClientOnly    = 0x00000001
 	dibRGBColors    = 0
 	biRGB           = 0
 	inputKeyboard   = 1
@@ -148,9 +147,20 @@ func (w window) GetImage() (image.RGBA, error) {
 		return image.RGBA{}, err
 	}
 
-	// PrintWindow asks the target application to render its own client area
-	// into our bitmap. Unlike BitBlt from the desktop DC, this is not affected
-	// by another window (for example Explorer) covering the game.
+	// Undertale uses a rendering path that can return a blank white bitmap
+	// with PrintWindow. Capture the real client pixels from the desktop DC,
+	// but first bring the exact game window to the foreground. This prevents
+	// accidentally capturing Explorer or another window that was covering it.
+	if err := w.SetActive(); err != nil {
+		return image.RGBA{}, fmt.Errorf("could not activate the game window for capture: %w", err)
+	}
+	procSleep.Call(120)
+
+	x, y, err := w.originAndSize()
+	if err != nil {
+		return image.RGBA{}, err
+	}
+
 	screenDC, _, _ := procGetDC.Call(0)
 	if screenDC == 0 {
 		return image.RGBA{}, errors.New("GetDC failed")
@@ -173,14 +183,10 @@ func (w window) GetImage() (image.RGBA, error) {
 	if old == 0 {
 		return image.RGBA{}, errors.New("SelectObject failed while preparing the game capture")
 	}
-
-	// PW_CLIENTONLY captures only the client area, excluding the title bar
-	// and borders. Do not silently fall back to desktop BitBlt: that would
-	// return whatever window happens to cover Undertale.
-	ok, _, callErr := procPrintWindow.Call(w.hwnd, memDC, pwClientOnly)
+	ok, _, _ := procBitBlt.Call(memDC, 0, 0, uintptr(width), uintptr(height), screenDC, uintptr(x), uintptr(y), srccopy)
 	procSelectObject.Call(memDC, old)
 	if ok == 0 {
-		return image.RGBA{}, fmt.Errorf("PrintWindow could not capture the Undertale client area (the game may not support off-screen capture): %v", callErr)
+		return image.RGBA{}, errors.New("BitBlt failed while capturing the active Undertale window")
 	}
 
 	pixels := make([]byte, width*height*4)
