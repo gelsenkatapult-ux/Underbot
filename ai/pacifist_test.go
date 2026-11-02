@@ -186,6 +186,35 @@ func TestPacifistTextOnlySubmenuConfirmsOnlyWhenExpected(t *testing.T) {
 	}
 }
 
+func TestPacifistSubmenuCanConfirmTwoExpectedLevels(t *testing.T) {
+	oldMode, oldTurns, oldCooldown, oldSteps := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
+	PacifistMode = true
+	pacifistMainMenuTurns = 0
+	battleMenuCooldownFrames = 0
+	pacifistSubmenuStepsRemaining = 2
+	defer func() {
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldSteps
+	}()
+	objects := []object.Object{menuObject(5, "redHeart", image.Rect(180, 80, 195, 95))}
+	window := &pacifistTestWindow{}
+
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if pacifistSubmenuStepsRemaining != 1 || len(window.keys) != 1 {
+		t.Fatalf("first submenu step = remaining %d, keys %v; want remaining 1 and one Z", pacifistSubmenuStepsRemaining, window.keys)
+	}
+
+	// Simulate enough game frames for the confirmation cooldown to expire.
+	battleMenuCooldownFrames = 0
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if pacifistSubmenuStepsRemaining != 0 || len(window.keys) != 2 {
+		t.Fatalf("second submenu step = remaining %d, keys %v; want remaining 0 and two Z inputs", pacifistSubmenuStepsRemaining, window.keys)
+	}
+}
+
 func TestPacifistUnknownTextScreenDoesNotConfirm(t *testing.T) {
 	oldMode, oldPending, oldCooldown := PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames
 	PacifistMode = true
