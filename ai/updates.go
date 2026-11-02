@@ -20,6 +20,9 @@ var GridShow bool
 // Should be ran in every update function (other than unknown)
 func genUpdate() {
 	unknownFrames = 0
+	if interactionCooldownFrames > 0 {
+		interactionCooldownFrames--
+	}
 }
 
 // BattleMenuUpdate is the function run every frame when the battle menu is detected
@@ -177,57 +180,94 @@ func SaveUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error 
 	return nil
 }
 
-// OutsideBattleUpdate is the function that pathfinds through the game
+// interactionCooldownFrames prevents repeated interaction inputs from being
+// sent on every rendered frame while Frisk is standing next to an object.
+var interactionCooldownFrames int
+
+// OutsideBattleUpdate pathfinds through the current room and executes exactly
+// one movement input per update. Recognized switches, room entrances and
+// selected story characters are used as local landmarks; the right-hand edge
+// remains the fallback when no landmark can be seen.
 func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
 	friskObjects, _ := GetWanted(objects, object.Frisk)
 	if len(friskObjects) == 0 {
-		// Stall until items can be found
 		failedRetrieval++
-		// If stalling takes too long, then try to get unstuck
 		if failedRetrieval > params.FailedLimit {
-			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-			unstuck(win)
+			fmt.Println("The AI cannot locate Frisk. Waiting for a recognizable frame...")
+			failedRetrieval = 0
 		}
 		return nil
 	}
 	failedRetrieval = 0
 
-	// The point in the middle of all the frisk objects
-	var averageX int
-	var averageY int
+	// Average all recognized body parts so side-facing and front-facing sprites
+	// use the same stable player position.
+	var playerX, playerY int
 	for _, obj := range friskObjects {
 		point := rect.RectangleCenter(obj.Parent.Bounds)
-		averageX += point.X
-		averageY += point.Y
+		playerX += point.X
+		playerY += point.Y
 	}
-	averageX = averageX / len(friskObjects)
-	averageY = averageY / len(friskObjects)
+	playerPoint := image.Pt(playerX/len(friskObjects), playerY/len(friskObjects))
 
-	img.Set(averageX, averageY, color.RGBA{255, 0, 0, 255})
-	rect.VLine(img, color.RGBA{255, 0, 0, 255}, averageX, averageY-10, averageY+10)
-	rect.HLine(img, color.RGBA{255, 0, 0, 255}, averageX-10, averageY, averageX+10)
-
-	// Draw the tiles on the screen
-	tiles, err := pathfinding.MakeTiles(*img)
+	grid, err := pathfinding.NewGrid(*img, params.TileSize)
 	if err != nil {
-		return errors.Wrap(err, "failed to create the screen tiles")
+		return errors.Wrap(err, "failed to create the room navigation grid")
+	}
+	start := grid.ClosestWalkableTile(playerPoint)
+	fallback := grid.RightEdgeGoal()
+	if start == nil || fallback == nil {
+		return nil
 	}
 
-	// Calculate which tile Frisk is in
+	goalPoint, goalName := chooseWorldGoal(objects, playerPoint, fallback.Center())
+	goal := grid.ClosestWalkableTile(goalPoint)
+	if goal == nil {
+		return nil
+	}
 
-	currentTile := pathfinding.GetCurrentTile(image.Point{averageX, averageY})
-	_, err = pathfinding.GetPath(currentTile, pathfinding.GetGoal())
+	// Draw the player marker only after the walkability map was sampled; debug
+	// pixels must not accidentally become walls in the navigation grid.
+	img.Set(playerPoint.X, playerPoint.Y, color.RGBA{R: 255, A: 255})
+	rect.VLine(img, color.RGBA{R: 255, A: 255}, playerPoint.X, playerPoint.Y-10, playerPoint.Y+10)
+	rect.HLine(img, color.RGBA{R: 255, A: 255}, playerPoint.X-10, playerPoint.Y, playerPoint.X+10)
+
+	path, err := grid.Path(start, goal)
 	if err != nil {
-		return errors.Wrap(err, "failed to generate path")
-	}
-	/*
-		for _, pathTile := range path {
-
+		failedRetrieval++
+		if failedRetrieval == 1 {
+			fmt.Printf("No walkable route to %s; waiting instead of issuing random movement.\n", goalName)
 		}
-	*/
+		if GridShow {
+			for _, tile := range grid.Tiles {
+				rect.DrawRectangle(img, tile.Color, tile.Rectangle)
+			}
+		}
+		return nil
+	}
+	failedRetrieval = 0
+
+	// Interact only with visible landmarks that need a confirmation key.
+	// Room entrances are approached by movement so Z is not spammed at doors.
+	if worldGoalNeedsInteraction(goalName) && withinWorldInteractionRange(playerPoint, goalPoint) {
+		if interactionCooldownFrames == 0 {
+			if err := win.Press("z"); err != nil {
+				return errors.Wrap(err, "failed to interact with the current room landmark")
+			}
+			interactionCooldownFrames = 45
+		}
+	} else if len(path) > 1 {
+		direction := movementDirection(playerPoint, path[1].Center())
+		if direction != "" {
+			if err := win.Press(direction); err != nil {
+				return errors.Wrap(err, fmt.Sprintf("failed to move Frisk %s", direction))
+			}
+		}
+	}
+
 	if GridShow {
-		for _, tile := range tiles {
+		for _, tile := range grid.Tiles {
 			rect.DrawRectangle(img, tile.Color, tile.Rectangle)
 		}
 	}
