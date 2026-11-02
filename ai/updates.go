@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"gitlab.com/256/Underbot/ai/pathfinding"
-\t"gitlab.com/256/Underbot/ai/combat"
+	"gitlab.com/256/Underbot/ai/combat"
 	"gitlab.com/256/Underbot/cv/object"
 	"gitlab.com/256/Underbot/cv/params"
 	"gitlab.com/256/Underbot/cv/rect"
