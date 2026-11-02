@@ -29,6 +29,9 @@ var (
 	procSetForegroundWindow    = user32.NewProc("SetForegroundWindow")
 	procSetWindowPos           = user32.NewProc("SetWindowPos")
 	procGetWindowThreadProcess = user32.NewProc("GetWindowThreadProcessId")
+	procGetWindowLongPtr     = user32.NewProc("GetWindowLongPtrW")
+	procGetMenu              = user32.NewProc("GetMenu")
+	procAdjustWindowRectEx   = user32.NewProc("AdjustWindowRectEx")
 	procOpenProcess            = syscall.NewLazyDLL("kernel32.dll").NewProc("OpenProcess")
 	procCloseHandle            = syscall.NewLazyDLL("kernel32.dll").NewProc("CloseHandle")
 	procNtSuspendProcess       = syscall.NewLazyDLL("ntdll.dll").NewProc("NtSuspendProcess")
@@ -88,6 +91,9 @@ type keybdInput struct {
 type keyboardInput struct {
 	Type uint32
 	Ki keybdInput
+	// INPUT is a tagged union. MOUSEINPUT is larger than KEYBDINPUT on
+	// both 32-bit and 64-bit Windows, so reserve the remaining union bytes.
+	Padding [8]byte
 }
 
 // Server is the native Win32 implementation of sys.Server.
@@ -149,13 +155,17 @@ func (w window) GetImage() (image.RGBA, error) {
 	}
 
 	// Undertale uses a rendering path that can return a blank white bitmap
-	// with PrintWindow. Capture the real client pixels from the desktop DC,
-	// but first bring the exact game window to the foreground. This prevents
-	// accidentally capturing Explorer or another window that was covering it.
-	if err := w.SetActive(); err != nil {
-		return image.RGBA{}, fmt.Errorf("could not activate the game window for capture: %w", err)
+	// with PrintWindow. Capture the real client pixels from the desktop DC.
+	// Only activate and wait when focus has actually moved elsewhere; doing
+	// this on every frame would both steal focus from the preview and cap the
+	// capture loop to roughly eight frames per second.
+	foreground, _, _ := procGetForegroundWindow.Call()
+	if foreground != w.hwnd {
+		if err := w.SetActive(); err != nil {
+			return image.RGBA{}, fmt.Errorf("could not activate the game window for capture: %w", err)
+		}
+		procSleep.Call(35)
 	}
-	procSleep.Call(120)
 
 	x, y, err := w.originAndSize()
 	if err != nil {
@@ -211,12 +221,35 @@ func (w window) Name() (string, error) {
 	return syscall.UTF16ToString(buf), nil
 }
 
-func (w window) Resize(width, height int) error {
+	func (w window) Resize(width, height int) error {
 	if err := w.valid(); err != nil { return err }
 	if width <= 0 || height <= 0 { return errors.New("window dimensions must be positive") }
-	ok, _, callErr := procSetWindowPos.Call(w.hwnd, 0, 0, 0, uintptr(width), uintptr(height), swpNoZOrder|swpNoActivate)
+	if int64(width) > int64(^uint32(0)>>1) || int64(height) > int64(^uint32(0)>>1) {
+		return errors.New("window dimensions exceed Win32 limits")
+	}
+
+	// SetWindowPos expects the outer window size. Convert the requested client
+	// dimensions to an outer size so the game capture remains 640x480, like
+	// the original X11 WMResize implementation.
+	style, _, _ := procGetWindowLongPtr.Call(w.hwnd, uintptr(uint32(0xFFFFFFF0))) // GWL_STYLE
+	exStyle, _, _ := procGetWindowLongPtr.Call(w.hwnd, uintptr(uint32(0xFFFFFFEC))) // GWL_EXSTYLE
+	menu, _, _ := procGetMenu.Call(w.hwnd)
+	r := winRect{Right: int32(width), Bottom: int32(height)}
+	ok, _, callErr := procAdjustWindowRectEx.Call(
+		uintptr(unsafe.Pointer(&r)), style, boolToUintptr(menu != 0), exStyle,
+	)
+	if ok == 0 { return fmt.Errorf("AdjustWindowRectEx failed: %v", callErr) }
+	outerWidth, outerHeight := int(r.Right-r.Left), int(r.Bottom-r.Top)
+	ok, _, callErr = procSetWindowPos.Call(w.hwnd, 0, 0, 0, uintptr(outerWidth), uintptr(outerHeight), swpNoZOrder|swpNoActivate)
 	if ok == 0 { return fmt.Errorf("SetWindowPos failed: %v", callErr) }
 	return nil
+}
+
+
+// boolToUintptr converts a Go boolean to the Win32 BOOL representation.
+func boolToUintptr(value bool) uintptr {
+	if value { return 1 }
+	return 0
 }
 
 func (w window) SetActive() error {
