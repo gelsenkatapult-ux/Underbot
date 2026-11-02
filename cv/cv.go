@@ -116,7 +116,10 @@ func ProcessImage(img *image.RGBA, win sys.Window) error {
 		}
 
 		// Gets surrounding rectangle of object
-		rec := rect.GetRectangle(obj)
+		rec := rect.GetRectangle(obj).Intersect(img.Bounds())
+		if rec.Empty() {
+			continue
+		}
 
 		// The color the surrounding rectangle should have
 		var dispColor color.Color
