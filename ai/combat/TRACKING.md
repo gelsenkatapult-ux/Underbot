@@ -2,7 +2,9 @@
 
 This package provides a pure-Go first step toward real-time combat movement.
 
-- `DetectProjectiles` extracts conservative color-connected candidates inside a supplied battle-box rectangle and supports player exclusion rectangles. This is an experimental candidate detector, not a trained sprite recognizer.
+- `FindBattleGeometry` reads the legacy recognizer's `fightBox` and red/blue/green SOUL objects; it rejects missing or out-of-box geometry.
+- `ObserveFrame` combines validated geometry, player exclusion, color-connected projectile candidates, and persistent tracking.
+- `DetectProjectiles` remains an experimental candidate detector, not a trained sprite recognizer.
 - `Tracker.Update` associates detections across frames.
 - Tracks estimate horizontal and vertical velocity in pixels per second.
 - `ProjectileTrack.Predict` extrapolates a short, constant-velocity trajectory.
@@ -14,10 +16,12 @@ This package provides a pure-Go first step toward real-time combat movement.
 
 ## Integration contract
 
-The current legacy CV pipeline does **not** yet identify projectiles. A future
-detector must produce `ProjectileObservation` values from validated attack
-sprites/masks, using the same client-area coordinates as the player and fight
-box. Do not feed every contour into this tracker as if it were a projectile.
+The legacy CV pipeline recognizes the fight box and the red, blue, or green
+SOUL. `ObserveFrame` now uses those recognized bounds to run the experimental
+color-component detector and tracker in `InBattleUpdate`. This is connected
+telemetry, not yet a validated attack recognizer: color effects, text, and
+particles can still be mistaken for projectiles. Do not use these candidates
+for autonomous input until tested against real battle captures.
 
 The planner is intentionally independent of Win32 input and does not press
 keys. The combat controller must additionally enforce SOUL mode constraints
