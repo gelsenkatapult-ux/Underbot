@@ -237,11 +237,13 @@ func screenCast() (image.Image, error) {
 */
 func main() {
 	// Profiling
-	defer pprof.StopCPUProfile()
 	defer func() {
-		err := memFile.Close()
-		if err != nil {
-			panic(errors.Wrap(err, "failed to close the memory file"))
+		pprof.StopCPUProfile()
+		if cpuFile != nil {
+			if err := cpuFile.Close(); err != nil { fmt.Printf("warning: could not close CPU profile: %v\\n", err) }
+		}
+		if memFile != nil {
+			if err := memFile.Close(); err != nil { fmt.Printf("warning: could not close memory profile: %v\\n", err) }
 		}
 	}()
 	err := HandleProfiling()
