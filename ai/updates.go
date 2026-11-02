@@ -342,9 +342,16 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 			}
 			interactionCooldownFrames = 45
 		}
-	} else if len(path) > 1 {
-		direction := movementDirection(playerPoint, path[1].Center())
-		if direction != "" {
+	} else {
+		// If start and goal fall inside the same tile, A* returns a one-tile
+		// path. Continue steering toward the exact goal pixel instead of
+		// stopping at the tile centre (especially important for doorways).
+		moveTarget := goalPoint
+		if len(path) > 1 {
+			moveTarget = path[1].Center()
+		}
+		direction := movementDirection(playerPoint, moveTarget)
+		if direction != "" && (abs(moveTarget.X-playerPoint.X) > 4 || abs(moveTarget.Y-playerPoint.Y) > 4) {
 			if err := win.Press(direction); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("failed to move Frisk %s", direction))
 			}
