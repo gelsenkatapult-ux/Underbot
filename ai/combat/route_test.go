@@ -24,8 +24,11 @@ func TestTruePacifistBossProgressionExceptions(t *testing.T) {
 			t.Errorf("encounter %q should permit only the required boss progression, got %+v", encounter, decision)
 		}
 	}
-	if CanUseFightForRoute(RouteTruePacifist, EncounterAsgore) != true {
-		t.Fatal("Asgore progression must be permitted")
+	if CanUseFightForRoute(RouteTruePacifist, EncounterAsgore) {
+		t.Fatal("stateless fight gate must fail closed without EXP/story evidence")
+	}
+	if !CanUseFightForProgress(RouteTruePacifist, EncounterAsgore, RouteProgress{}) {
+		t.Fatal("progress-aware gate should permit required Asgore progression before Neutral ending")
 	}
 	if CanUseFightForRoute(RouteTruePacifist, EncounterOrdinary) {
 		t.Fatal("ordinary encounters must not permit FIGHT")
