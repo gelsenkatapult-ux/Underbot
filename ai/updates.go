@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"gitlab.com/256/Underbot/ai/pathfinding"\n\t"gitlab.com/256/Underbot/ai/combat"
+	"gitlab.com/256/Underbot/ai/pathfinding"
+\t"gitlab.com/256/Underbot/ai/combat"
 	"gitlab.com/256/Underbot/cv/object"
 	"gitlab.com/256/Underbot/cv/params"
 	"gitlab.com/256/Underbot/cv/rect"
@@ -15,7 +16,10 @@ import (
 )
 
 // GridShow determines if the pathfinding grid is enabled
-var GridShow bool\n\n// combatTracker keeps projectile identities stable between consecutive battle frames.\nvar combatTracker = combat.NewTracker()
+var GridShow bool
+
+// combatTracker keeps projectile identities stable between consecutive battle frames.
+var combatTracker = combat.NewTracker()
 
 // Should be ran in every update function (other than unknown)
 func genUpdate() {
