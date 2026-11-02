@@ -12,6 +12,26 @@ import (
 // label is highlighted yellow by Undertale.
 var PacifistMode = true
 
+func isMainBattleMenu(options []object.RecognizedObject) bool {
+	if len(options) != 4 {
+		return false
+	}
+	minY := options[0].Parent.Bounds.Min.Y + options[0].Parent.Bounds.Dy()/2
+	maxY := minY
+	for _, option := range options[1:] {
+		centerY := option.Parent.Bounds.Min.Y + option.Parent.Bounds.Dy()/2
+		if centerY < minY {
+			minY = centerY
+		}
+		if centerY > maxY {
+			maxY = centerY
+		}
+	}
+	// The four main buttons share a horizontal baseline. ACT submenus are
+	// generally arranged as a vertical list and must not be mistaken for them.
+	return maxY-minY <= 12
+}
+
 func pacifistOptionIndex(optionCount int, mercyHighlighted bool) int {
 	if optionCount <= 1 {
 		return 0
