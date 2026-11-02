@@ -9,6 +9,7 @@ import (
 	"image"
 	"os"
 	"syscall"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -307,7 +308,7 @@ func (w window) PressFor(key string, duration time.Duration) error {
 }
 
 func virtualKeyFor(key string) (uint16, error) {
-	switch key {
+	switch strings.ToLower(key) {
 	case "z": return 'Z', nil
 	case "x": return 'X', nil
 	case "up": return 0x26, nil
