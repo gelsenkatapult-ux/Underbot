@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"gitlab.com/256/Underbot/ai/pathfinding"
+	"gitlab.com/256/Underbot/ai/pathfinding"\n\t"gitlab.com/256/Underbot/ai/combat"
 	"gitlab.com/256/Underbot/cv/object"
 	"gitlab.com/256/Underbot/cv/params"
 	"gitlab.com/256/Underbot/cv/rect"
@@ -15,7 +15,7 @@ import (
 )
 
 // GridShow determines if the pathfinding grid is enabled
-var GridShow bool
+var GridShow bool\n\n// combatTracker keeps projectile identities stable between consecutive battle frames.\nvar combatTracker = combat.NewTracker()
 
 // Should be ran in every update function (other than unknown)
 func genUpdate() {
@@ -108,6 +108,32 @@ func InBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) er
 		return nil
 	}
 	failedRetrieval = 0
+
+	// Build combat observations only when both the fight box and SOUL are
+	// recognized. This stage is telemetry-only: no combat keypresses are sent.
+	observation, observed := combat.ObserveFrame(img, objects, combatTracker)
+	if observed && GridShow {
+		for _, projectile := range observation.Projectiles {
+			var marker color.RGBA
+			switch projectile.Class {
+			case combat.AttackWhite:
+				marker = color.RGBA{255, 255, 255, 255}
+			case combat.AttackGray:
+				marker = color.RGBA{150, 150, 150, 255}
+			case combat.AttackRed:
+				marker = color.RGBA{255, 0, 0, 255}
+			case combat.AttackGreen:
+				marker = color.RGBA{0, 220, 0, 255}
+			case combat.AttackLightBlue:
+				marker = color.RGBA{80, 190, 255, 255}
+			case combat.AttackOrange:
+				marker = color.RGBA{255, 140, 0, 255}
+			case combat.AttackYellow:
+				marker = color.RGBA{255, 230, 0, 255}
+			}
+			rect.DrawRectangle(img, marker, projectile.Bounds)
+		}
+	}
 
 	// Draw the tiles on the screen
 	tiles, err := pathfinding.MakeTiles(*img)
