@@ -1,0 +1,282 @@
+package ai
+
+import (
+	"image"
+	"os"
+	"testing"
+
+	"gitlab.com/256/Underbot/cv/object"
+)
+
+func TestIsMainBattleMenuUsesHorizontalFourButtonLayout(t *testing.T) {
+	options := []object.RecognizedObject{
+		{Parent: &object.Object{Bounds: image.Rect(10, 10, 117, 49)}},
+		{Parent: &object.Object{Bounds: image.Rect(150, 11, 257, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(290, 9, 397, 48)}},
+		{Parent: &object.Object{Bounds: image.Rect(430, 10, 537, 49)}},
+	}
+	if !isMainBattleMenu(options) {
+		t.Fatal("four buttons on one baseline were not identified as the main menu")
+	}
+	options[2].Parent.Bounds = image.Rect(290, 70, 397, 109)
+	if isMainBattleMenu(options) {
+		t.Fatal("vertically arranged options were incorrectly identified as the main menu")
+	}
+	if isMainBattleMenu(options[:2]) {
+		t.Fatal("two ACT submenu options were incorrectly identified as the main menu")
+	}
+}
+
+func TestClosestMenuOptionIndexUsesCursorProximity(t *testing.T) {
+	options := []object.RecognizedObject{
+		{Parent: &object.Object{Bounds: image.Rect(10, 10, 110, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(150, 10, 250, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(290, 10, 390, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(430, 10, 530, 50)}},
+	}
+	// The heart is offset to the left of the currently selected option;
+	// it does not have to overlap that option's centre.
+	if got := closestMenuOptionIndex(options, image.Pt(140, 30)); got != 1 {
+		t.Fatalf("closestMenuOptionIndex = %d, want option 1", got)
+	}
+	if got := closestMenuOptionIndex(options, image.Pt(280, 30)); got != 2 {
+		t.Fatalf("closestMenuOptionIndex = %d, want option 2", got)
+	}
+	if got := closestMenuOptionIndex(nil, image.Pt(10, 10)); got != -1 {
+		t.Fatalf("closestMenuOptionIndex on empty list = %d, want -1", got)
+	}
+}
+
+func TestPacifistOptionIndex(t *testing.T) {
+	tests := []struct {
+		name       string
+		count      int
+		chooseMercy bool
+		want       int
+	}{
+		{"main menu prefers ACT", 4, false, 1},
+		{"every other main-menu turn tries MERCY", 4, true, 3},
+		{"two-option submenu chooses first entry", 2, false, 0},
+		{"single option", 1, false, 0},
+		{"empty options", 0, false, 0},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := pacifistOptionIndex(test.count, test.chooseMercy); got != test.want {
+				t.Fatalf("pacifistOptionIndex(%d, %t) = %d, want %d", test.count, test.chooseMercy, got, test.want)
+			}
+		})
+	}
+}
+
+type pacifistTestWindow struct {
+	keys []string
+}
+
+func (w *pacifistTestWindow) GetImage() (image.RGBA, error) { return image.RGBA{}, nil }
+func (w *pacifistTestWindow) Center() (image.Point, error) { return image.Point{}, nil }
+func (w *pacifistTestWindow) Process() (*os.Process, error) { return nil, nil }
+func (w *pacifistTestWindow) Name() (string, error) { return "test", nil }
+func (w *pacifistTestWindow) Resize(int, int) error { return nil }
+func (w *pacifistTestWindow) SetActive() error { return nil }
+func (w *pacifistTestWindow) Pause() error { return nil }
+func (w *pacifistTestWindow) Resume() error { return nil }
+func (w *pacifistTestWindow) Press(key string) error {
+	w.keys = append(w.keys, key)
+	return nil
+}
+func (w *pacifistTestWindow) WxH() (int, int, error) { return 640, 480, nil }
+func (w *pacifistTestWindow) ID() (int, error) { return 1, nil }
+
+func menuObject(id int, name string, bounds image.Rectangle) object.Object {
+	return object.Object{
+		ID:         id,
+		Bounds:     bounds,
+		Recognized: true,
+		RecogObj: object.RecognizedObject{
+			Parent: &object.Object{ID: id, Bounds: bounds},
+			Type:   object.RecognizableObject{Name: name},
+		},
+	}
+}
+
+func TestBattleMenuSelectsACTOnFirstMainMenuTurn(t *testing.T) {
+	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
+	PacifistMode = true
+	pacifistMainMenuTurns = 0
+	battleMenuCooldownFrames = 0
+	pacifistSubmenuStepsRemaining = 0
+	defer func() {
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldPending
+	}()
+
+	objects := []object.Object{
+		menuObject(1, "battleOption", image.Rect(10, 10, 117, 49)),
+		menuObject(2, "battleOption", image.Rect(150, 10, 257, 49)),
+		menuObject(3, "battleOption", image.Rect(290, 10, 397, 49)),
+		menuObject(4, "battleOption", image.Rect(430, 10, 537, 49)),
+		menuObject(5, "redHeart", image.Rect(198, 22, 213, 37)),
+	}
+	window := &pacifistTestWindow{}
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if len(window.keys) != 1 || window.keys[0] != "z" {
+		t.Fatalf("menu input = %v, want [z] to confirm ACT", window.keys)
+	}
+	if pacifistSubmenuStepsRemaining != 2 {
+		t.Fatalf("confirming ACT set submenu steps to %d, want 2", pacifistSubmenuStepsRemaining)
+	}
+}
+
+func TestBattleMenuAlternatesToMercyAfterACTTurn(t *testing.T) {
+	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
+	PacifistMode = true
+	pacifistMainMenuTurns = 1
+	battleMenuCooldownFrames = 0
+	pacifistSubmenuStepsRemaining = 0
+	defer func() {
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldPending
+	}()
+
+	objects := []object.Object{
+		menuObject(1, "battleOption", image.Rect(10, 10, 117, 49)),
+		menuObject(2, "battleOption", image.Rect(150, 10, 257, 49)),
+		menuObject(3, "battleOption", image.Rect(290, 10, 397, 49)),
+		menuObject(4, "battleOption", image.Rect(430, 10, 537, 49)),
+		menuObject(5, "redHeart", image.Rect(475, 20, 490, 35)),
+	}
+	window := &pacifistTestWindow{}
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if len(window.keys) != 1 || window.keys[0] != "z" {
+		t.Fatalf("menu input = %v, want [z] to confirm the scheduled MERCY attempt", window.keys)
+	}
+	if pacifistSubmenuStepsRemaining != 2 {
+		t.Fatalf("confirming MERCY set submenu steps to %d, want 2", pacifistSubmenuStepsRemaining)
+	}
+}
+
+func TestPacifistDoesNotConfirmAnIncompleteMainMenu(t *testing.T) {
+	oldMode, oldPending, oldCooldown := PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames
+	PacifistMode = true
+	pacifistSubmenuStepsRemaining = 0
+	battleMenuCooldownFrames = 0
+	defer func() {
+		PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames = oldMode, oldPending, oldCooldown
+	}()
+	objects := []object.Object{
+		menuObject(1, "battleOption", image.Rect(10, 10, 117, 49)),
+		menuObject(2, "redHeart", image.Rect(20, 20, 35, 35)),
+	}
+	window := &pacifistTestWindow{}
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if len(window.keys) != 0 {
+		t.Fatalf("incomplete menu emitted unsafe inputs %v", window.keys)
+	}
+}
+
+func TestPacifistTextOnlySubmenuConfirmsOnlyWhenExpected(t *testing.T) {
+	oldMode, oldTurns, oldCooldown, oldPending := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
+	PacifistMode = true
+	pacifistMainMenuTurns = 1
+	battleMenuCooldownFrames = 0
+	pacifistSubmenuStepsRemaining = 1
+	defer func() {
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldPending
+	}()
+	objects := []object.Object{
+		menuObject(5, "redHeart", image.Rect(180, 80, 195, 95)),
+	}
+	window := &pacifistTestWindow{}
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if len(window.keys) != 1 || window.keys[0] != "z" {
+		t.Fatalf("first submenu input = %v, want one Z", window.keys)
+	}
+	if pacifistSubmenuStepsRemaining != 0 {
+		t.Fatalf("first text-only submenu left %d steps, want 0 in this one-step fixture", pacifistSubmenuStepsRemaining)
+	}
+	if battleMenuCooldownFrames == 0 {
+		t.Fatal("submenu confirmation did not set a cooldown")
+	}
+}
+
+func TestPacifistSubmenuCanConfirmTwoExpectedLevels(t *testing.T) {
+	oldMode, oldTurns, oldCooldown, oldSteps := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining
+	PacifistMode = true
+	pacifistMainMenuTurns = 0
+	battleMenuCooldownFrames = 0
+	pacifistSubmenuStepsRemaining = 2
+	defer func() {
+		PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames, pacifistSubmenuStepsRemaining = oldMode, oldTurns, oldCooldown, oldSteps
+	}()
+	objects := []object.Object{menuObject(5, "redHeart", image.Rect(180, 80, 195, 95))}
+	window := &pacifistTestWindow{}
+
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if pacifistSubmenuStepsRemaining != 1 || len(window.keys) != 1 {
+		t.Fatalf("first submenu step = remaining %d, keys %v; want remaining 1 and one Z", pacifistSubmenuStepsRemaining, window.keys)
+	}
+
+	// Simulate enough game frames for the confirmation cooldown to expire.
+	battleMenuCooldownFrames = 0
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if pacifistSubmenuStepsRemaining != 0 || len(window.keys) != 2 {
+		t.Fatalf("second submenu step = remaining %d, keys %v; want remaining 0 and two Z inputs", pacifistSubmenuStepsRemaining, window.keys)
+	}
+}
+
+func TestPacifistUnknownTextScreenDoesNotConfirm(t *testing.T) {
+	oldMode, oldPending, oldCooldown := PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames
+	PacifistMode = true
+	pacifistSubmenuStepsRemaining = 0
+	battleMenuCooldownFrames = 0
+	defer func() {
+		PacifistMode, pacifistSubmenuStepsRemaining, battleMenuCooldownFrames = oldMode, oldPending, oldCooldown
+	}()
+	objects := []object.Object{menuObject(5, "redHeart", image.Rect(180, 80, 195, 95))}
+	window := &pacifistTestWindow{}
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if len(window.keys) != 0 {
+		t.Fatalf("unknown text-only screen emitted unsafe inputs %v", window.keys)
+	}
+}
+
+func TestAttackGoalNeverConfirmsInPacifistMode(t *testing.T) {
+	old := PacifistMode
+	PacifistMode = true
+	defer func() { PacifistMode = old }()
+	window := &pacifistTestWindow{}
+	if err := AttackGoalUpdate(nil, window, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(window.keys) != 0 {
+		t.Fatalf("attack timing emitted inputs %v in pacifist mode", window.keys)
+	}
+}
+
+func TestUnstuckOnlyUsesDirectionalInputs(t *testing.T) {
+	window := &pacifistTestWindow{}
+	for i := 0; i < 8; i++ {
+		if err := unstuck(window); err != nil {
+			t.Fatal(err)
+		}
+	}
+	allowed := map[string]bool{"up": true, "right": true, "down": true, "left": true}
+	for _, key := range window.keys {
+		if !allowed[key] {
+			t.Fatalf("unstuck issued unsafe confirmation key %q", key)
+		}
+	}
+}

@@ -18,6 +18,9 @@ func TestVirtualKeyForSupportsOriginalUnderbotKeys(t *testing.T) {
 		"left": 0x25,
 		"right": 0x27,
 		"enter": 0x0D,
+		"Z": 0x5A,
+		"LEFT": 0x25,
+		"Enter": 0x0D,
 	}
 	for key, want := range tests {
 		got, err := virtualKeyFor(key)
@@ -32,7 +35,7 @@ func TestVirtualKeyForSupportsOriginalUnderbotKeys(t *testing.T) {
 }
 
 func TestVirtualKeyForRejectsUnknownKeys(t *testing.T) {
-	for _, key := range []string{"", "space", "escape", "Z", "mouse"} {
+	for _, key := range []string{"", "space", "escape", "mouse"} {
 		if _, err := virtualKeyFor(key); err == nil {
 			t.Errorf("virtualKeyFor(%q) unexpectedly succeeded", key)
 		}

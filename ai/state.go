@@ -78,6 +78,8 @@ var attackGoalSigns = []object.RecognizableObject{
 var States = []State{
 	// When no game state seems suitable for the recognized objects (or lack thereof)
 	NewState("Unknown", emptyObjects, emptyObjects, UnknownUpdate, -1),
+	// Stop issuing input after the recognized Undertale game-over screen.
+	NewState("gameOver", []object.RecognizableObject{object.RecMap["gameOverM"]}, emptyObjects, GameOverUpdate, -1),
 	// After encountering a battle when no option has been pressed yet
 	NewState("battleMenu", battleMenuSigns, emptyObjects, BattleMenuUpdate, -1),
 	NewState("inBattle", inBattleSigns, emptyObjects, InBattleUpdate, -1),                // When the opponent is attacking
@@ -86,5 +88,5 @@ var States = []State{
 	// The screen where you can choose to "Save" or "Return" at a checkpoint
 	NewState("saveScreen", saveScreenSigns, emptyObjects, SaveUpdate, -1),
 	// After pressing fight, when z needs to be pressed with good timing
-	NewState("attackGoal", attackGoalSigns, emptyObjects, BattleMenuUpdate, -1),
+	NewState("attackGoal", attackGoalSigns, emptyObjects, AttackGoalUpdate, -1),
 }

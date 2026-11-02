@@ -57,16 +57,35 @@ The GitHub Actions workflow `.github/workflows/windows-full-build.yml` provision
 
 ## Port scope and gameplay status
 
-The Windows branch is a platform port of the original project, not a replacement
-or completion of its game-playing logic. The original AI remains a prototype:
-outside battle it calculates a path but its movement-execution loop is still
-commented out; during enemy attack phases it builds the tile view but does not
-yet implement the movement/dodge controller. Battle interaction is limited to
-basic Fight-menu selection and dialogue/save keypresses; ACT/MERCY decisions, attack timing and bullet-hell dodging are not implemented.
+The Windows port now has a native Win32 window/input/capture backend, a
+standalone capture diagnostic, and a CI workflow for building the original GUI.
+The original game logic is preserved, with targeted improvements to the
+prototype AI:
 
-For that reason, a successful Windows build or backend smoke test must not be
-interpreted as proof that the bot can complete an entire Undertale run. This
-port preserves those original limitations deliberately rather than silently
-changing the game logic. The Windows release workflow validates compilation,
-repository tests, GoCV/OpenCV runtime loading and packaging; a full real-game
-playthrough remains a separate, currently unverified test.
+- Overworld navigation uses an image-bounds-aware A* grid, avoids tiles
+  classified as black obstacles, executes the next movement step, and uses
+  visible switches, room entrances, the training dummy and Toriel as local
+  landmarks. The old right-edge target remains the fallback.
+- Battle handling detects small, bright contours inside the fight box and
+  applies a reactive dodge heuristic for red/blue souls. For green souls it
+  turns the shield toward the nearest detected hazard.
+- Pacifist mode is enabled by default. The four-button battle menu is ordered
+  by screen position; the bot alternates ACT turns with attempts to Spare.
+  It confirms up to two expected submenu entries (for example, a target
+  selection followed by the first ACT/Spare entry). The automatic fight-timing
+  confirmation is disabled in this mode, unknown-state recovery only presses
+  directional keys, and a recognized Game Over screen disables the AI.
+
+These behaviours are deliberately conservative prototypes, not a certified
+playthrough system. Projectile detection can miss attacks or mistake visual
+effects for hazards; green-shield direction is inferred from the nearest
+visible object and not its trajectory. Enemy-specific ACT choices are not
+recognized, so the first visible ACT submenu entry is selected. Many story
+puzzles, room transitions, bosses, and scripted events still need explicit
+recognition and handling. The bot does not yet have a complete room map or
+dialogue/OCR system.
+
+A successful Windows build or unit-test run therefore does **not** prove that
+the bot can complete a True Pacifist route. The full real-game playthrough,
+including all bosses and the ending sequence, remains unverified and is a
+release blocker for claiming the bot is fully autonomous.
