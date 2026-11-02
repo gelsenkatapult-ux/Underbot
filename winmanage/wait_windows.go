@@ -5,6 +5,7 @@ package winmanage
 
 import (
 	"time"
+	"errors"
 	"syscall"
 )
 
@@ -16,8 +17,13 @@ func waitForSelect() error {
 	const (
 		vkLButton = 0x01
 		vkShift   = 0x10
+		vkEscape  = 0x1B
 	)
 	for {
+		escape, _, _ := procGetAsyncKeyState.Call(vkEscape)
+		if escape&0x8000 != 0 {
+			return errors.New("window selection cancelled with Escape")
+		}
 		shift, _, _ := procGetAsyncKeyState.Call(vkShift)
 		left, _, _ := procGetAsyncKeyState.Call(vkLButton)
 		if shift&0x8000 != 0 && left&0x8000 != 0 {
