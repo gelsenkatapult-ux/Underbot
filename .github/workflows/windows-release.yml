@@ -1,0 +1,170 @@
+name: Windows full application and release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'windows-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build original Underbot GUI for Windows
+    runs-on: windows-2022
+    timeout-minutes: 360
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.12'
+          cache: true
+
+      - name: Cache legacy MinGW and OpenCV
+        id: opencv-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\mingw-w64
+            C:\opencv\build\install
+          key: underbot-opencv-3.4.2-mingw-6.3.0-gocv-0.14.0-v1
+
+      - name: Install the original MinGW toolchain and CMake
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!(Get-Command 7z -ErrorAction SilentlyContinue)) {
+            choco install 7zip --yes --no-progress
+          }
+          if (!(Get-Command cmake -ErrorAction SilentlyContinue)) {
+            $cmakeZip = Join-Path $env:RUNNER_TEMP 'cmake-3.27.9-windows-x86_64.zip'
+            Invoke-WebRequest 'https://github.com/Kitware/CMake/releases/download/v3.27.9/cmake-3.27.9-windows-x86_64.zip' -OutFile $cmakeZip
+            Expand-Archive $cmakeZip -DestinationPath $env:RUNNER_TEMP
+            $cmakeBin = Join-Path $env:RUNNER_TEMP 'cmake-3.27.9-windows-x86_64\bin'
+            Add-Content $env:GITHUB_PATH $cmakeBin
+            $env:Path = "$cmakeBin;$env:Path"
+          }
+
+          $gcc = Get-ChildItem 'C:\mingw-w64' -Filter gcc.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (!$gcc) {
+            New-Item -ItemType Directory -Force 'C:\mingw-w64' | Out-Null
+            $archive = Join-Path $env:RUNNER_TEMP 'mingw-w64-6.3.0-posix-seh.7z'
+            $url = 'https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/6.3.0/threads-posix/seh/x86_64-6.3.0-release-posix-seh-rt_v5-rev1.7z/download'
+            Invoke-WebRequest $url -OutFile $archive
+            & 7z x $archive '-oC:\mingw-w64' -y
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract the pinned MinGW-w64 archive.' }
+            $gcc = Get-ChildItem 'C:\mingw-w64' -Filter gcc.exe -Recurse | Select-Object -First 1
+          }
+          if (!$gcc) { throw 'MinGW gcc.exe was not found after installation.' }
+          $mingwHome = $gcc.Directory.Parent.FullName
+          if (!(Test-Path (Join-Path $mingwHome 'bin\g++.exe'))) { throw 'The matching MinGW g++ compiler is missing.' }
+          Add-Content $env:GITHUB_PATH (Join-Path $mingwHome 'bin')
+          Add-Content $env:GITHUB_ENV "MINGW64_HOME=$mingwHome"
+          $env:Path = "$(Join-Path $mingwHome 'bin');$env:Path"
+          gcc --version
+          g++ --version
+          cmake --version
+
+      - name: Build OpenCV 3.4.2 for the pinned GoCV 0.14.0
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:Path = "$env:MINGW64_HOME\bin;$env:Path"
+          New-Item -ItemType Directory -Force 'C:\opencv' | Out-Null
+          $opencvZip = Join-Path $env:RUNNER_TEMP 'opencv-3.4.2.zip'
+          $contribZip = Join-Path $env:RUNNER_TEMP 'opencv_contrib-3.4.2.zip'
+          Invoke-WebRequest 'https://github.com/opencv/opencv/archive/3.4.2.zip' -OutFile $opencvZip
+          Invoke-WebRequest 'https://github.com/opencv/opencv_contrib/archive/3.4.2.zip' -OutFile $contribZip
+          Expand-Archive $opencvZip -DestinationPath 'C:\opencv'
+          Expand-Archive $contribZip -DestinationPath 'C:\opencv'
+
+          cmake 'C:\opencv\opencv-3.4.2' -G 'MinGW Makefiles' -B 'C:\opencv\build' -DCMAKE_MAKE_PROGRAM="$env:MINGW64_HOME\bin\mingw32-make.exe" -DENABLE_CXX11=ON -DOPENCV_EXTRA_MODULES_PATH='C:\opencv\opencv_contrib-3.4.2\modules' -DBUILD_SHARED_LIBS=ON -DWITH_IPP=OFF -DWITH_MSMF=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_opencv_java=OFF -DBUILD_opencv_python=OFF -DBUILD_opencv_python2=OFF -DBUILD_opencv_python3=OFF -DBUILD_DOCS=OFF -DENABLE_PRECOMPILED_HEADERS=OFF -DBUILD_opencv_saliency=OFF -DCPU_DISPATCH= -Wno-dev
+          if ($LASTEXITCODE -ne 0) { throw 'OpenCV CMake configuration failed.' }
+          & "$env:MINGW64_HOME\bin\mingw32-make.exe" -C 'C:\opencv\build' -j2
+          if ($LASTEXITCODE -ne 0) { throw 'OpenCV compilation failed.' }
+          & "$env:MINGW64_HOME\bin\mingw32-make.exe" -C 'C:\opencv\build' install
+          if ($LASTEXITCODE -ne 0) { throw 'OpenCV installation failed.' }
+
+      - name: Verify pinned OpenCV libraries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lib = 'C:\opencv\build\install\x64\mingw\lib'
+          $bin = 'C:\opencv\build\install\x64\mingw\bin'
+          $required = @('libopencv_core342.dll.a','libopencv_imgproc342.dll.a','libopencv_imgcodecs342.dll.a','libopencv_highgui342.dll.a','libopencv_videoio342.dll.a','libopencv_face342.dll.a','libopencv_objdetect342.dll.a','libopencv_features2d342.dll.a','libopencv_video342.dll.a','libopencv_dnn342.dll.a','libopencv_xfeatures2d342.dll.a','libopencv_plot342.dll.a','libopencv_tracking342.dll.a','libopencv_img_hash342.dll.a','libopencv_calib3d342.dll.a')
+          foreach ($file in $required) {
+            if (!(Test-Path (Join-Path $lib $file))) { throw "Required OpenCV import library missing: $file" }
+          }
+          if (!(Get-ChildItem $bin -Filter '*.dll' -ErrorAction SilentlyContinue)) { throw 'OpenCV runtime DLLs were not installed.' }
+
+      - name: Download original Go modules
+        run: go mod download
+
+      - name: Build the complete Underbot GUI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'amd64'
+          $env:CGO_ENABLED = '1'
+          $env:CC = "$env:MINGW64_HOME\bin\gcc.exe"
+          $env:CXX = "$env:MINGW64_HOME\bin\g++.exe"
+          go build -v -o Underbot.exe .
+          if ($LASTEXITCODE -ne 0) { throw 'The complete Underbot GUI build failed.' }
+          if (!(Test-Path '.\Underbot.exe')) { throw 'Underbot.exe was not produced.' }
+
+      - name: Assemble portable Windows package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dist = Join-Path $PWD 'Underbot-Windows'
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          Copy-Item '.\Underbot.exe' $dist
+          Copy-Item 'C:\opencv\build\install\x64\mingw\bin\*.dll' $dist
+          foreach ($runtime in @('libstdc++-6.dll','libgcc_s_seh-1.dll','libwinpthread-1.dll','libgomp-1.dll')) {
+            $source = Join-Path $env:MINGW64_HOME "bin\$runtime"
+            if (Test-Path $source) { Copy-Item $source $dist }
+          }
+          @'
+          Underbot - Windows build
+
+          Requirements:
+          - Windows 10/11 64-bit
+          - Undertale installed and running
+
+          Start Underbot.exe, then Shift-click the Undertale window when prompted.
+          Keep Undertale visible and unobscured while Underbot is capturing it.
+          The original Underbot gameplay logic is unchanged by this Windows port.
+
+          This package includes the matching OpenCV 3.4.2 and MinGW runtime DLLs.
+          Do not remove the DLL files from this folder.
+          '@ | Set-Content (Join-Path $dist 'README-Windows.txt') -Encoding UTF8
+          Compress-Archive -Path "$dist\*" -DestinationPath 'Underbot-Windows-x64.zip' -Force
+          Get-ChildItem $dist | Select-Object Name,Length
+          if (!(Test-Path '.\Underbot-Windows-x64.zip')) { throw 'Windows package archive was not created.' }
+
+      - name: Upload Windows application package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Underbot-Windows-x64
+          path: Underbot-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish prerelease for version tags
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Underbot ${{ github.ref_name }}
+          body: |
+            Windows x64 build of the original Underbot codebase.
+
+            The gameplay/AI logic is preserved from the original project. This release is a Windows port build; a complete start-to-finish Undertale playthrough has not yet been independently verified.
+          files: Underbot-Windows-x64.zip
+          prerelease: true
+          draft: false
