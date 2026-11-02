@@ -119,7 +119,8 @@ func ChooseDodge(player, board image.Rectangle, tracks []ProjectileTrack, horizo
 	steps := 8
 	for _, candidate := range candidates {
 		moved := player.Add(image.Pt(candidate.dx, candidate.dy))
-		if !board.Inset(margin).In(moved.Min) || !board.Inset(margin).In(moved.Max.Sub(image.Pt(1, 1))) { continue }
+		safeBoard := board.Inset(margin)
+		if safeBoard.Empty() || !moved.Min.In(safeBoard) || !moved.Max.Sub(image.Pt(1, 1)).In(safeBoard) { continue }
 		minDistance := math.Inf(1)
 		collision := false
 		for step := 0; step <= steps; step++ {
