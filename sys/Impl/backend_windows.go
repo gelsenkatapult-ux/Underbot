@@ -39,6 +39,7 @@ var (
 	procCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
 	procSelectObject           = gdi32.NewProc("SelectObject")
 	procBitBlt                 = gdi32.NewProc("BitBlt")
+	procPrintWindow            = user32.NewProc("PrintWindow")
 	procGetDIBits              = gdi32.NewProc("GetDIBits")
 	procDeleteObject           = gdi32.NewProc("DeleteObject")
 	procDeleteDC               = gdi32.NewProc("DeleteDC")
@@ -49,6 +50,7 @@ const (
 	swpNoZOrder     = 0x0004
 	swpNoActivate   = 0x0010
 	srccopy         = 0x00CC0020
+	pwClientOnly    = 0x00000001
 	dibRGBColors    = 0
 	biRGB           = 0
 	inputKeyboard   = 1
@@ -139,30 +141,58 @@ func (w window) WxH() (int, int, error) { return w.dimensions() }
 
 func (w window) GetImage() (image.RGBA, error) {
 	width, height, err := w.dimensions()
-	if err != nil { return image.RGBA{}, err }
+	if err != nil {
+		return image.RGBA{}, err
+	}
+	if err := w.valid(); err != nil {
+		return image.RGBA{}, err
+	}
+
+	// PrintWindow asks the target application to render its own client area
+	// into our bitmap. Unlike BitBlt from the desktop DC, this is not affected
+	// by another window (for example Explorer) covering the game.
 	screenDC, _, _ := procGetDC.Call(0)
-	if screenDC == 0 { return image.RGBA{}, errors.New("GetDC failed") }
+	if screenDC == 0 {
+		return image.RGBA{}, errors.New("GetDC failed")
+	}
 	defer procReleaseDC.Call(0, screenDC)
+
 	memDC, _, _ := procCreateCompatibleDC.Call(screenDC)
-	if memDC == 0 { return image.RGBA{}, errors.New("CreateCompatibleDC failed") }
+	if memDC == 0 {
+		return image.RGBA{}, errors.New("CreateCompatibleDC failed")
+	}
 	defer procDeleteDC.Call(memDC)
+
 	bitmap, _, _ := procCreateCompatibleBitmap.Call(screenDC, uintptr(width), uintptr(height))
-	if bitmap == 0 { return image.RGBA{}, errors.New("CreateCompatibleBitmap failed") }
+	if bitmap == 0 {
+		return image.RGBA{}, errors.New("CreateCompatibleBitmap failed")
+	}
 	defer procDeleteObject.Call(bitmap)
+
 	old, _, _ := procSelectObject.Call(memDC, bitmap)
-	x, y, err := w.originAndSize()
-	if err != nil { return image.RGBA{}, err }
-	ok, _, _ := procBitBlt.Call(memDC, 0, 0, uintptr(width), uintptr(height), screenDC, uintptr(x), uintptr(y), srccopy)
-	if ok == 0 { return image.RGBA{}, errors.New("BitBlt failed while capturing the game window") }
-	// GetDIBits requires the bitmap not to be selected into a device context.
+	if old == 0 {
+		return image.RGBA{}, errors.New("SelectObject failed while preparing the game capture")
+	}
+
+	// PW_CLIENTONLY captures only the client area, excluding the title bar
+	// and borders. Do not silently fall back to desktop BitBlt: that would
+	// return whatever window happens to cover Undertale.
+	ok, _, callErr := procPrintWindow.Call(w.hwnd, memDC, pwClientOnly)
 	procSelectObject.Call(memDC, old)
+	if ok == 0 {
+		return image.RGBA{}, fmt.Errorf("PrintWindow could not capture the Undertale client area (the game may not support off-screen capture): %v", callErr)
+	}
 
 	pixels := make([]byte, width*height*4)
 	bmi := bitmapInfo{Header: bitmapInfoHeader{Size: uint32(unsafe.Sizeof(bitmapInfoHeader{})), Width: int32(width), Height: -int32(height), Planes: 1, BitCount: 32, Compression: biRGB}}
 	lines, _, _ := procGetDIBits.Call(screenDC, bitmap, 0, uintptr(height), uintptr(unsafe.Pointer(&pixels[0])), uintptr(unsafe.Pointer(&bmi)), dibRGBColors)
-	if lines == 0 { return image.RGBA{}, errors.New("GetDIBits failed while converting the window image") }
-	for i := 0; i < len(pixels); i += 4 { pixels[i], pixels[i+2], pixels[i+3] = pixels[i+2], pixels[i], 255 }
-	return image.RGBA{Pix: pixels, Stride: width*4, Rect: image.Rect(0, 0, width, height)}, nil
+	if lines == 0 {
+		return image.RGBA{}, errors.New("GetDIBits failed while converting the captured game image")
+	}
+	for i := 0; i < len(pixels); i += 4 {
+		pixels[i], pixels[i+2], pixels[i+3] = pixels[i+2], pixels[i], 255
+	}
+	return image.RGBA{Pix: pixels, Stride: width * 4, Rect: image.Rect(0, 0, width, height)}, nil
 }
 
 func (w window) Name() (string, error) {
