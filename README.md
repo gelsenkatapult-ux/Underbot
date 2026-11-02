@@ -45,9 +45,10 @@ To prepare a Windows machine for the original application:
    ```
 
 4. Add `C:\opencv\build\install\x64\mingw\bin` and the MinGW `bin` directory to the Windows `PATH`. The pinned GoCV cgo configuration expects OpenCV headers under `C:\opencv\build\install\include` and libraries under `C:\opencv\build\install\x64\mingw\lib`.
-5. From the Underbot repository root, download the pinned Go modules and build the original GUI:
+5. From the Underbot repository root, enable CGO, download the pinned Go modules and build the original GUI:
 
    ```powershell
+   $env:CGO_ENABLED = '1'
    go mod download
    go build -o Underbot.exe .
    ```
