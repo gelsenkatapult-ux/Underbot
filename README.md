@@ -33,7 +33,7 @@ The full application uses the same legacy dependency set as the original project
 
 To prepare a Windows machine for the original application:
 
-1. Install 64-bit MinGW-w64 with POSIX threads and SEH exceptions. The original GoCV 0.14.0 Windows instructions were written for MinGW-w64 7.x (the 7.3.0 toolchain was used in the historical setup).
+1. Install 64-bit MinGW-w64 with POSIX threads and SEH exceptions. The pinned GoCV 0.14.0 `win_build_opencv.cmd` uses MinGW-w64 GCC 6.3.0 (`x86_64-6.3.0-release-posix-seh-rt_v5-rev1`). The CI may use the archived GCC 7.3.0 bundle from the Qt mirror only as a fallback when the original SourceForge archive is unavailable.
 2. Install CMake.
 3. Check out the exact GoCV source revision used by the original lock file and build its matching OpenCV version:
 
