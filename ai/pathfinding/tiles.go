@@ -163,7 +163,7 @@ func GetGoal() *Tile {
 func GetCurrentTile(fPoint image.Point) *Tile {
 
 	var nearest *Tile
-	bestDistance := math.MaxInt
+	bestDistance := int(^uint(0) >> 1)
 	for _, tile := range tiles {
 		if fPoint.In(tile.Rectangle) {
 			tile.Color = color.RGBA{22, 193, 0, 255}
