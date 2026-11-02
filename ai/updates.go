@@ -98,8 +98,8 @@ func DialogueUpdate(objects []object.Object, win sys.Window, img *image.RGBA) er
 // InBattleUpdate is the function run every frame when dialogue is detected
 func InBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
-	heartObjects, err := GetWanted(objects, append([]object.RecognizableObject{}, object.Hearts...))
-	if err != nil || len(heartObjects) == 0 {
+	heartObjects, _ := GetWanted(objects, append([]object.RecognizableObject{}, object.Hearts...))
+	if len(heartObjects) == 0 {
 		// Stall until items can be found
 		failedRetrieval++
 		// If stalling takes too long, then try to get unstuck
