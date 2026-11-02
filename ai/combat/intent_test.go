@@ -10,11 +10,11 @@ func TestAttackIntentUsesAttackClassAndSoulMode(t *testing.T) {
 	}{
 		{SoulRed, AttackWhite, IntentDodge},
 		{SoulBlue, AttackWhite, IntentDodge},
-		{SoulGreen, AttackWhite, IntentDodge},
+		{SoulGreen, AttackWhite, IntentShield},
 		{SoulRed, AttackLightBlue, IntentStayStill},
 		{SoulRed, AttackOrange, IntentKeepMoving},
 		{SoulRed, AttackGreen, IntentCollect},
-		{SoulGreen, AttackGreen, IntentShield},
+		{SoulGreen, AttackGreen, IntentCollect},
 		{SoulYellow, AttackYellow, IntentShoot},
 		{SoulRed, AttackYellow, IntentWarning},
 		{SoulRed, AttackGray, IntentNoAction},
