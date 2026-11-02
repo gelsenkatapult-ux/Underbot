@@ -5,6 +5,7 @@ package impl
 
 import (
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -53,5 +54,11 @@ func TestKeyboardInputHasTheNativeWin32InputSize(t *testing.T) {
 func TestBoolToUintptr(t *testing.T) {
 	if boolToUintptr(true) != 1 || boolToUintptr(false) != 0 {
 		t.Fatal("boolToUintptr did not return Win32 BOOL values")
+	}
+}
+
+func TestDefaultKeyPressDurationMatchesOriginalBackend(t *testing.T) {
+	if defaultKeyPressDuration != 40*time.Millisecond {
+		t.Fatalf("default key press duration = %s, want 40ms to match the original backend", defaultKeyPressDuration)
 	}
 }
