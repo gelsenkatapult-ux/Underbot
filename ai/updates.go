@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math/rand"
+	"sort"
 
 	"github.com/pkg/errors"
 	"gitlab.com/256/Underbot/ai/pathfinding"
@@ -25,47 +25,66 @@ func genUpdate() {
 	}
 }
 
-// BattleMenuUpdate is the function run every frame when the battle menu is detected
+// BattleMenuUpdate selects a non-violent action by default. On the main
+// four-button menu it selects ACT, unless MERCY is visibly yellow (spareable).
+// In a smaller ACT submenu it chooses the first listed option. This is a
+// conservative generic policy; enemy-specific ACT choices are not inferred.
 func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
-	recObjects, err := GetWanted(objects, []object.RecognizableObject{
-		object.RecMap["battleOption"],
-		object.RecMap["redHeart"],
-	})
-	if err != nil {
-
-	}
-	recMap := Map(recObjects)
-
-	var farthest int
-	var fightOption object.RecognizedObject
-	for i, option := range recMap["battleOption"] {
-		if i == 0 {
-			farthest = option.Parent.ID
-			fightOption = option
+	options := make([]object.RecognizedObject, 0, 4)
+	var heart *object.Object
+	for i := range objects {
+		candidate := &objects[i]
+		if !candidate.Recognized {
 			continue
 		}
-		if farthest < option.Parent.ID {
-			farthest = option.Parent.ID
-			fightOption = option
+		switch candidate.RecogObj.Type.Name {
+		case "battleOption":
+			options = append(options, candidate.RecogObj)
+		case "redHeart":
+			if heart == nil {
+				heart = candidate
+			}
 		}
 	}
-
-	redHeart := rect.RectangleCenter(recMap["redHeart"][0].Parent.Bounds)
-	fightCenter := rect.RectangleCenter(fightOption.Parent.Bounds)
-
-	if redHeart.X > fightCenter.X {
-		err := win.Press("left")
-		if err != nil {
-			return errors.Wrap(err, "couldn't press left arrow key")
-		}
-	} else {
-		err := win.Press("z")
-		if err != nil {
-			return errors.Wrap(err, "couldn't press z key")
-		}
+	if heart == nil || len(options) == 0 {
+		return nil
 	}
 
+	// Stable screen order is independent of OpenCV contour IDs, which are not
+	// a meaningful menu ordering and caused the original random selection.
+	sort.SliceStable(options, func(i, j int) bool {
+		left := rect.RectangleCenter(options[i].Parent.Bounds)
+		right := rect.RectangleCenter(options[j].Parent.Bounds)
+		if left.Y == right.Y {
+			return left.X < right.X
+		}
+		return left.Y < right.Y
+	})
+
+	targetIndex := 0
+	if PacifistMode {
+		mercyHighlighted := false
+		if len(options) >= 4 {
+			mercyHighlighted = hasYellowMenuText(img, options[len(options)-1].Parent.Bounds)
+		}
+		targetIndex = pacifistOptionIndex(len(options), mercyHighlighted)
+	}
+	target := rect.RectangleCenter(options[targetIndex].Parent.Bounds)
+	player := rect.RectangleCenter(heart.Bounds)
+
+	if abs(player.X-target.X) > 5 || abs(player.Y-target.Y) > 5 {
+		direction := movementDirection(player, target)
+		if direction != "" {
+			if err := win.Press(direction); err != nil {
+				return errors.Wrap(err, fmt.Sprintf("couldn't move the menu cursor %s", direction))
+			}
+		}
+		return nil
+	}
+	if err := win.Press("z"); err != nil {
+		return errors.Wrap(err, "couldn't confirm the selected non-violent menu option")
+	}
 	return nil
 }
 
