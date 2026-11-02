@@ -2,7 +2,6 @@ package ai
 
 import (
 	"image"
-	"math"
 
 	"gitlab.com/256/Underbot/cv/object"
 )
@@ -47,7 +46,7 @@ func chooseWorldGoal(objects []object.Object, current, fallback image.Point) (im
 	}
 	for _, wanted := range priorities {
 		var nearest image.Point
-		bestDistance := math.MaxInt
+		bestDistance := int(^uint(0) >> 1)
 		found := false
 		for _, candidate := range objects {
 			if !candidate.Recognized || candidate.RecogObj.Type.Name != wanted {
