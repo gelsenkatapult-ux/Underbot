@@ -300,7 +300,7 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	}
 	playerPoint := image.Pt(playerX/len(friskObjects), playerY/len(friskObjects))
 
-	grid, err := pathfinding.NewGrid(*img, params.TileSize)
+	grid, err := pathfinding.NewGrid(img, params.TileSize)
 	if err != nil {
 		return errors.Wrap(err, "failed to create the room navigation grid")
 	}
