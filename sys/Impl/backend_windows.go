@@ -258,57 +258,62 @@ func (w window) Pause() error { return w.suspendOrResume(false) }
 func (w window) Resume() error { return w.suspendOrResume(true) }
 
 func (w window) Press(key string) error {
-	if err := w.valid(); err != nil { return err }
-	var vk uint16
-	switch key {
-	case "z": vk = 'Z'
-	case "x": vk = 'X'
-	case "up": vk = 0x26
-	case "down": vk = 0x28
-	case "left": vk = 0x25
-	case "right": vk = 0x27
-	case "enter": vk = virtualKeyEnter
-	default: return fmt.Errorf("unsupported key %q", key)
-	}
-	foreground, _, _ := procGetForegroundWindow.Call()
-	if foreground != w.hwnd {
-		if err := w.SetActive(); err != nil { return err }
-	}
-	inputs := []keyboardInput{{Type: inputKeyboard, Ki: keybdInput{Vk: vk}}, {Type: inputKeyboard, Ki: keybdInput{Vk: vk, Flags: keyeventKeyup}}}
-	sent, _, callErr := procSendInput.Call(uintptr(len(inputs)), uintptr(unsafe.Pointer(&inputs[0])), unsafe.Sizeof(inputs[0]))
-	if sent != uintptr(len(inputs)) { return fmt.Errorf("SendInput sent %d of %d keyboard events: %v", sent, len(inputs), callErr) }
-	return nil
+	vk, err := virtualKeyFor(key)
+	if err != nil { return err }
+	return w.pressVirtualKey(vk, 0)
 }
 
-// PressFor holds a supported key for the requested duration and always releases it.
+// PressFor holds a supported key for the requested duration and always attempts
+// to release it, including when the timed hold or first key-up event fails.
 func (w window) PressFor(key string, duration time.Duration) error {
-	if err := w.valid(); err != nil { return err }
-	var vk uint16
+	vk, err := virtualKeyFor(key)
+	if err != nil { return err }
+	return w.pressVirtualKey(vk, duration)
+}
+
+func virtualKeyFor(key string) (uint16, error) {
 	switch key {
-	case "z": vk = 'Z'
-	case "x": vk = 'X'
-	case "up": vk = 0x26
-	case "down": vk = 0x28
-	case "left": vk = 0x25
-	case "right": vk = 0x27
-	case "enter": vk = virtualKeyEnter
-	default: return fmt.Errorf("unsupported key %q", key)
+	case "z": return 'Z', nil
+	case "x": return 'X', nil
+	case "up": return 0x26, nil
+	case "down": return 0x28, nil
+	case "left": return 0x25, nil
+	case "right": return 0x27, nil
+	case "enter": return virtualKeyEnter, nil
+	default: return 0, fmt.Errorf("unsupported key %q", key)
 	}
-	if duration <= 0 { return w.Press(key) }
+}
+
+func (w window) pressVirtualKey(vk uint16, duration time.Duration) error {
+	if err := w.valid(); err != nil { return err }
 	foreground, _, _ := procGetForegroundWindow.Call()
 	if foreground != w.hwnd {
 		if err := w.SetActive(); err != nil { return err }
 	}
+
 	down := keyboardInput{Type: inputKeyboard, Ki: keybdInput{Vk: vk}}
 	up := keyboardInput{Type: inputKeyboard, Ki: keybdInput{Vk: vk, Flags: keyeventKeyup}}
 	sent, _, callErr := procSendInput.Call(1, uintptr(unsafe.Pointer(&down)), unsafe.Sizeof(down))
-	if sent != 1 { return fmt.Errorf("SendInput could not press %q: %v", key, callErr) }
-	milliseconds := duration.Milliseconds()
-	if milliseconds < 1 { milliseconds = 1 }
-	if milliseconds > int64(^uint32(0)) { milliseconds = int64(^uint32(0)) }
-	procSleep.Call(uintptr(uint32(milliseconds)))
+	if sent != 1 { return fmt.Errorf("SendInput could not press virtual key 0x%X: %v", vk, callErr) }
+
+	released := false
+	defer func() {
+		if !released {
+			// Retry key-up during stack unwinding if the normal release fails.
+			procSendInput.Call(1, uintptr(unsafe.Pointer(&up)), unsafe.Sizeof(up))
+		}
+	}()
+
+	if duration > 0 {
+		milliseconds := duration.Milliseconds()
+		if milliseconds < 1 { milliseconds = 1 }
+		if milliseconds > int64(^uint32(0)) { milliseconds = int64(^uint32(0)) }
+		procSleep.Call(uintptr(uint32(milliseconds)))
+	}
+
 	sent, _, callErr = procSendInput.Call(1, uintptr(unsafe.Pointer(&up)), unsafe.Sizeof(up))
-	if sent != 1 { return fmt.Errorf("SendInput could not release %q: %v", key, callErr) }
+	if sent != 1 { return fmt.Errorf("SendInput could not release virtual key 0x%X: %v", vk, callErr) }
+	released = true
 	return nil
 }
 
