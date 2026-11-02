@@ -59,8 +59,8 @@ jobs:
           if (-not $gcc -and (Test-Path 'C:\msys64\usr\bin\bash.exe')) {
             $msysGcc = 'C:\msys64\mingw64\bin\gcc.exe'
             if (-not (Test-Path $msysGcc)) {
-              & 'C:\msys64\usr\bin\bash.exe' -lc 'pacman -Sy --noconfirm mingw-w64-x86_64-gcc'
-              if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not install MinGW GCC through MSYS2; will try the pinned legacy archive.' }
+              & 'C:\msys64\usr\bin\bash.exe' -lc 'timeout 120 pacman -Sy --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-make'
+              if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not install MinGW GCC/make through MSYS2; will try the pinned legacy archive.' }
             }
             if (Test-Path $msysGcc) {
               $gcc = Get-Item $msysGcc
