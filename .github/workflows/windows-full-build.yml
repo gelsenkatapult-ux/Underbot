@@ -41,35 +41,44 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $gcc = Get-ChildItem C:\mingw -Filter gcc.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
 
-          # Prefer a compatible MinGW already present on the hosted runner.
-          # Some runner images expose GCC separately from the C:\mingw folder.
           if (-not $gcc) {
             $pathGcc = Get-Command gcc.exe -ErrorAction SilentlyContinue
             if ($pathGcc) {
               $target = (& $pathGcc.Source -dumpmachine 2>$null | Select-Object -First 1).Trim()
-              if ($target -eq 'x86_64-w64-mingw32') {
-                $gcc = Get-Item $pathGcc.Source
-              }
+              if ($target -eq 'x86_64-w64-mingw32') { $gcc = Get-Item $pathGcc.Source }
             }
           }
 
-          # GitHub's Windows 2022 image includes MSYS2. Prefer its
-          # maintained x86_64 MinGW toolchain when the legacy 6.3 archive
-          # cannot be fetched; keep the pinned archive as the last fallback.
-          if (-not $gcc -and (Test-Path 'C:\msys64\usr\bin\bash.exe')) {
-            $msysGcc = 'C:\msys64\mingw64\bin\gcc.exe'
-            if (-not (Test-Path $msysGcc)) {
-              & 'C:\msys64\usr\bin\bash.exe' -lc 'timeout 120 pacman -Sy --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-make'
-              if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not install MinGW GCC/make through MSYS2; will try the pinned legacy archive.' }
-            }
-            if (Test-Path $msysGcc) {
-              $gcc = Get-Item $msysGcc
-              Write-Host 'Using the runner-provided MSYS2 x86_64 MinGW toolchain.'
-            }
+          $sevenZip = (Get-Command 7z.exe -ErrorAction SilentlyContinue).Source
+          if (-not $sevenZip) { $sevenZip = Join-Path $env:ProgramFiles '7-Zip\7z.exe' }
+          if (-not (Test-Path $sevenZip)) {
+            choco install 7zip --no-progress -y
+            $sevenZip = Join-Path $env:ProgramFiles '7-Zip\7z.exe'
           }
 
+          # The Qt archive mirror hosts an unmodified MinGW-w64 7.3.0
+          # POSIX/SEH bundle. Try this direct mirror before SourceForge,
+          # whose download endpoint sometimes returns an HTML challenge.
           if (-not $gcc) {
-            $archive = Join-Path $env:RUNNER_TEMP 'mingw-6.3.0.7z'
+            $archive = Join-Path $env:RUNNER_TEMP 'mingw-w64-7.3.0.7z'
+            try {
+              Invoke-WebRequest -Uri 'https://download.qt.io/development_releases/prebuilt/mingw_64/x86_64-7.3.0-release-posix-seh-rt_v5-rev0.7z' -OutFile $archive -TimeoutSec 120
+              $bytes = [System.IO.File]::ReadAllBytes($archive)
+              $signature = ($bytes[0..5] | ForEach-Object { $_.ToString('X2') }) -join ''
+              if ($bytes.Length -lt 30000000 -or $signature -ne '377ABCAF271C') { throw "Qt mirror did not return a valid 7z archive (bytes=$($bytes.Length), signature=$signature)." }
+              New-Item -ItemType Directory -Force C:\mingw | Out-Null
+              & $sevenZip x $archive '-oC:\mingw' -y
+              if ($LASTEXITCODE -ne 0) { throw 'Could not extract the MinGW-w64 7.3.0 archive.' }
+              $gcc = Get-ChildItem C:\mingw -Filter gcc.exe -Recurse | Select-Object -First 1
+            } catch {
+              Write-Warning "Qt MinGW mirror failed: $($_.Exception.Message)"
+            }
+          }
+
+          # Fall back to the exact 6.3.0 compiler selected in GoCV's
+          # historical Windows build script.
+          if (-not $gcc) {
+            $archive = Join-Path $env:RUNNER_TEMP 'mingw-w64-6.3.0.7z'
             $relative = 'Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/6.3.0/threads-posix/seh/x86_64-6.3.0-release-posix-seh-rt_v5-rev1.7z'
             $mirrors = @(
               'https://netix.dl.sourceforge.net/project/mingw-w64',
@@ -81,44 +90,41 @@ jobs:
               'https://downloads.sourceforge.net/project/mingw-w64'
             )
             $downloaded = $false
-            $failures = @()
             foreach ($mirror in $mirrors) {
-              $url = "$mirror/$relative"
               try {
                 Remove-Item $archive -Force -ErrorAction SilentlyContinue
-                Write-Host "Trying MinGW mirror: $mirror"
-                Invoke-WebRequest -Uri $url -OutFile $archive -Headers @{ 'User-Agent' = 'Underbot-Windows-Build/1.0' } -TimeoutSec 35
+                Invoke-WebRequest -Uri "$mirror/$relative" -OutFile $archive -Headers @{ 'User-Agent' = 'Underbot-Windows-Build/1.0' } -TimeoutSec 25
                 $bytes = [System.IO.File]::ReadAllBytes($archive)
                 $signature = ($bytes[0..5] | ForEach-Object { $_.ToString('X2') }) -join ''
                 if ($bytes.Length -gt 30000000 -and $signature -eq '377ABCAF271C') {
                   $downloaded = $true
-                  Write-Host "Received valid MinGW 7z archive ($($bytes.Length) bytes)."
                   break
                 }
-                $failures += "$mirror returned an invalid archive (bytes=$($bytes.Length), signature=$signature)."
+                Write-Warning "$mirror returned an invalid 7z archive."
               } catch {
-                $failures += "$mirror failed: $($_.Exception.Message)"
+                Write-Warning "$mirror failed: $($_.Exception.Message)"
               }
             }
-            if (-not $downloaded) {
-              throw ("Could not retrieve the original MinGW-w64 6.3.0 archive from any mirror. " + ($failures -join ' | '))
+            if ($downloaded) {
+              New-Item -ItemType Directory -Force C:\mingw | Out-Null
+              & $sevenZip x $archive '-oC:\mingw' -y
+              if ($LASTEXITCODE -ne 0) { throw 'Could not extract the pinned MinGW-w64 6.3.0 toolchain.' }
+              $gcc = Get-ChildItem C:\mingw -Filter gcc.exe -Recurse | Select-Object -First 1
             }
-
-            $sevenZip = (Get-Command 7z.exe -ErrorAction SilentlyContinue).Source
-            if (-not $sevenZip) { $sevenZip = Join-Path $env:ProgramFiles '7-Zip\7z.exe' }
-            if (-not (Test-Path $sevenZip)) {
-              choco install 7zip --no-progress -y
-              $sevenZip = Join-Path $env:ProgramFiles '7-Zip\7z.exe'
-            }
-            New-Item -ItemType Directory -Force C:\mingw | Out-Null
-            & $sevenZip x $archive '-oC:\mingw' -y
-            if ($LASTEXITCODE -ne 0) { throw 'Could not extract the pinned MinGW-w64 toolchain.' }
-            $gcc = Get-ChildItem C:\mingw -Filter gcc.exe -Recurse | Select-Object -First 1
           }
 
-          if (-not $gcc) { throw 'gcc.exe was not found in the MinGW-w64 installation.' }
+          # Last fallback: MSYS2 is already present on the windows-2022 image.
+          if (-not $gcc -and (Test-Path 'C:\msys64\usr\bin\bash.exe')) {
+            & 'C:\msys64\usr\bin\bash.exe' -lc 'timeout 120 pacman -Sy --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-make'
+            if ($LASTEXITCODE -eq 0 -and (Test-Path 'C:\msys64\mingw64\bin\gcc.exe')) {
+              $gcc = Get-Item 'C:\msys64\mingw64\bin\gcc.exe'
+            }
+          }
+
+          if (-not $gcc) { throw 'No usable x86_64 MinGW compiler could be installed.' }
           $mingwBin = $gcc.Directory.FullName
           if (-not (Test-Path (Join-Path $mingwBin 'g++.exe'))) { throw 'The matching g++.exe compiler is missing.' }
+          if (-not (Test-Path (Join-Path $mingwBin 'mingw32-make.exe'))) { throw 'The matching mingw32-make.exe is missing.' }
           $mingwBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "MINGW_BIN=$mingwBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & (Join-Path $mingwBin 'gcc.exe') --version
