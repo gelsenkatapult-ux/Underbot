@@ -45,7 +45,9 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		}
 		switch candidate.RecogObj.Type.Name {
 		case "battleOption":
-			options = append(options, candidate.RecogObj)
+			if candidate.RecogObj.Parent != nil {
+				options = append(options, candidate.RecogObj)
+			}
 		case "redHeart":
 			if heart == nil {
 				heart = candidate
