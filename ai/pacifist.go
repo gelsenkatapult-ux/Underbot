@@ -19,22 +19,17 @@ var (
 )
 
 func pacifistOptionIndex(optionCount int, chooseMercy bool) int {
-	if optionCount <= 1 {
-		return 0
+	if optionCount >= 4 && chooseMercy {
+		return optionCount - 1 // MERCY is the final button in the main menu.
 	}
-	if optionCount >= 4 {
-		if chooseMercy {
-			return optionCount - 1
-		}
-		return 1 // ACT is the second option in Undertale's main battle menu; the final option is MERCY.
+	if optionCount >= 2 {
+		return 1 // ACT is second; safer than confirming the first (FIGHT) button.
 	}
-	// In an ACT submenu, prefer the first listed action rather than a random
-	// menu entry. Game-specific ACT text still needs explicit recognition.
 	return 0
 }
 
 func isMainBattleMenu(options []object.RecognizedObject) bool {
-	if len(options) != 4 {
+	if len(options) < 2 || len(options) > 4 {
 		return false
 	}
 	minY := options[0].Parent.Bounds.Min.Y + options[0].Parent.Bounds.Dy()/2
@@ -48,8 +43,8 @@ func isMainBattleMenu(options []object.RecognizedObject) bool {
 			maxY = centerY
 		}
 	}
-	// The four main buttons share a horizontal baseline. ACT submenus are
-	// generally arranged as a vertical list and must not be mistaken for them.
+	// Main-menu buttons share a horizontal baseline. ACT submenus are generally
+	// arranged as vertical lists and must not be mistaken for the main menu.
 	return maxY-minY <= 12
 }
 
