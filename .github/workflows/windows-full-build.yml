@@ -259,7 +259,7 @@ jobs:
       - name: Run all repository tests with CGO and OpenCV enabled
         shell: pwsh
         run: |
-          go test -count=1 ./...
+          go test -mod=mod -count=1 ./...
           if ($LASTEXITCODE -ne 0) { throw 'One or more repository tests failed.' }
 
       - name: Runtime smoke test for the pinned GoCV/OpenCV pair
