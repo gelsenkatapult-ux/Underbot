@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"time"
+	"math/rand"
 
 	"github.com/pkg/errors"
 	"gitlab.com/256/Underbot/ai/pathfinding"
-	"gitlab.com/256/Underbot/ai/combat"
 	"gitlab.com/256/Underbot/cv/object"
 	"gitlab.com/256/Underbot/cv/params"
 	"gitlab.com/256/Underbot/cv/rect"
@@ -17,9 +16,6 @@ import (
 
 // GridShow determines if the pathfinding grid is enabled
 var GridShow bool
-
-// combatTracker keeps projectile identities stable between consecutive battle frames.
-var combatTracker = combat.NewTracker()
 
 // Should be ran in every update function (other than unknown)
 func genUpdate() {
@@ -34,41 +30,38 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		object.RecMap["redHeart"],
 	})
 	if err != nil {
-		failedRetrieval++
-		if failedRetrieval > params.FailedLimit {
-			return errors.Wrap(err, "battle menu objects were not detected")
-		}
-		return nil
+
 	}
-	failedRetrieval = 0
 	recMap := Map(recObjects)
-	if len(recMap["battleOption"]) == 0 || len(recMap["redHeart"]) == 0 {
-		return nil
-	}
 
-	options := make([]image.Rectangle, 0, len(recMap["battleOption"]))
-	for _, option := range recMap["battleOption"] {
-		options = append(options, option.Parent.Bounds)
-	}
-	target, ok := combat.PacifistMenuTarget(options)
-	if !ok {
-		// Unknown menu layout: never fall back to FIGHT or confirm a choice.
-		return nil
-	}
-
-	heart := rect.RectangleCenter(recMap["redHeart"][0].Parent.Bounds)
-	const selectionTolerance = 18
-	if heart.X < target.X-selectionTolerance {
-		if err := win.Press("right"); err != nil {
-			return errors.Wrap(err, "couldn't move to ACT")
+	var farthest int
+	var fightOption object.RecognizedObject
+	for i, option := range recMap["battleOption"] {
+		if i == 0 {
+			farthest = option.Parent.ID
+			fightOption = option
+			continue
 		}
-	} else if heart.X > target.X+selectionTolerance {
-		if err := win.Press("left"); err != nil {
-			return errors.Wrap(err, "couldn't move to ACT")
+		if farthest < option.Parent.ID {
+			farthest = option.Parent.ID
+			fightOption = option
 		}
 	}
-	// Intentionally do not press Z here. The ACT submenu and its text are not
-	// recognized yet, so confirming could select an unsafe or unknown action.
+
+	redHeart := rect.RectangleCenter(recMap["redHeart"][0].Parent.Bounds)
+	fightCenter := rect.RectangleCenter(fightOption.Parent.Bounds)
+
+	if redHeart.X > fightCenter.X {
+		err := win.Press("left")
+		if err != nil {
+			return errors.Wrap(err, "couldn't press left arrow key")
+		}
+	} else {
+		err := win.Press("z")
+		if err != nil {
+			return errors.Wrap(err, "couldn't press z key")
+		}
+	}
 
 	return nil
 }
@@ -96,43 +89,18 @@ func DialogueUpdate(objects []object.Object, win sys.Window, img *image.RGBA) er
 // InBattleUpdate is the function run every frame when dialogue is detected
 func InBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
-	heartObjects, _ := GetWanted(objects, append([]object.RecognizableObject{}, object.Hearts...))
+	heartObjects, err := GetWanted(objects, append([]object.RecognizableObject{}, object.Hearts...))
 	if len(heartObjects) == 0 {
 		// Stall until items can be found
 		failedRetrieval++
 		// If stalling takes too long, then try to get unstuck
-		if failedRetrieval == params.FailedLimit+1 {
-			fmt.Println("The AI cannot identify the player or battle state; waiting for a clear frame.")
+		if failedRetrieval > params.FailedLimit {
+			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
+			unstuck(win)
 		}
 		return nil
 	}
 	failedRetrieval = 0
-
-	// Build combat observations only when both the fight box and SOUL are
-	// recognized. This stage is telemetry-only: no combat keypresses are sent.
-	observation, observed := combat.ObserveFrame(img, objects, combatTracker)
-	if observed && GridShow {
-		for _, projectile := range observation.Projectiles {
-			var marker color.RGBA
-			switch projectile.Class {
-			case combat.AttackWhite:
-				marker = color.RGBA{255, 255, 255, 255}
-			case combat.AttackGray:
-				marker = color.RGBA{150, 150, 150, 255}
-			case combat.AttackRed:
-				marker = color.RGBA{255, 0, 0, 255}
-			case combat.AttackGreen:
-				marker = color.RGBA{0, 220, 0, 255}
-			case combat.AttackLightBlue:
-				marker = color.RGBA{80, 190, 255, 255}
-			case combat.AttackOrange:
-				marker = color.RGBA{255, 140, 0, 255}
-			case combat.AttackYellow:
-				marker = color.RGBA{255, 230, 0, 255}
-			}
-			rect.DrawRectangle(img, marker, projectile.Bounds)
-		}
-	}
 
 	// Draw the tiles on the screen
 	tiles, err := pathfinding.MakeTiles(*img)
@@ -170,17 +138,17 @@ func SaveUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error 
 		object.RecMap["saveBox"],
 	})
 	if err != nil {
+		// Stall until items can be found
 		failedRetrieval++
-		if failedRetrieval == params.FailedLimit+1 {
-			fmt.Println("The AI cannot identify the save screen; waiting for a clear frame.")
+		// If stalling takes too long, then try to get unstuck
+		if failedRetrieval > params.FailedLimit {
+			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
+			unstuck(win)
 		}
 		return nil
 	}
 	failedRetrieval = 0
 	recMap := Map(recObjects)
-	if len(recMap["redHeart"]) == 0 || len(recMap["saveBox"]) == 0 {
-		return nil
-	}
 
 	// Determines if the heart is on the left side, indicating that it is selecting save
 	if rect.RectangleCenter(recMap["redHeart"][0].Parent.Bounds).X < rect.RectangleCenter(recMap["saveBox"][0].Parent.Bounds).X {
@@ -217,8 +185,9 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 		// Stall until items can be found
 		failedRetrieval++
 		// If stalling takes too long, then try to get unstuck
-		if failedRetrieval == params.FailedLimit+1 {
-			fmt.Println("The AI cannot identify the player or battle state; waiting for a clear frame.")
+		if failedRetrieval > params.FailedLimit {
+			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
+			unstuck(win)
 		}
 		return nil
 	}
@@ -248,31 +217,15 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	// Calculate which tile Frisk is in
 
 	currentTile := pathfinding.GetCurrentTile(image.Point{averageX, averageY})
-	goalTile := pathfinding.GetGoal()
-	if currentTile == nil || goalTile == nil {
-		return nil // Wait for a usable player position and walkable exit tile.
-	}
-	path, err := pathfinding.GetPath(currentTile, goalTile)
+	_, err = pathfinding.GetPath(currentTile, pathfinding.GetGoal())
 	if err != nil {
 		return errors.Wrap(err, "failed to generate path")
 	}
-	// Follow one tile at a time. Short key holds allow the next frame to
-	// re-evaluate the screen instead of committing to a long blind movement.
-	if len(path) > 1 {
-		target := rect.RectangleCenter(path[1].Rectangle)
-		dx, dy := target.X-averageX, target.Y-averageY
-		key := ""
-		if abs(dx) >= abs(dy) {
-			if dx > 0 { key = "right" } else if dx < 0 { key = "left" }
-		} else {
-			if dy > 0 { key = "down" } else if dy < 0 { key = "up" }
+	/*
+		for _, pathTile := range path {
+
 		}
-		if key != "" {
-			if err := pressFor(win, key, 90*time.Millisecond); err != nil {
-				return errors.Wrapf(err, "failed to move %s toward the next path tile", key)
-			}
-		}
-	}
+	*/
 	if GridShow {
 		for _, tile := range tiles {
 			rect.DrawRectangle(img, tile.Color, tile.Rectangle)
@@ -281,9 +234,14 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	return nil
 }
 
-// unstuck deliberately avoids arbitrary keypresses. Random inputs can confirm a
-// destructive menu choice or walk Frisk into danger, so wait for recognition instead.
+// unstuck will do keypresses that attempt to get the game to a state that can be detected properly
 func unstuck(win sys.Window) error {
+	keys := []string{"z", "x", "up", "left", "right", "down", "enter"}
+	randKey := keys[rand.Intn(len(keys))]
+	err := win.Press(randKey)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed to press %s key", randKey))
+	}
 	return nil
 }
 
@@ -295,8 +253,12 @@ func UnknownUpdate(objects []object.Object, win sys.Window, img *image.RGBA) err
 	// Stall until items can be found
 	unknownFrames++
 	// If stalling takes too long, then try to get unstuck
-	if unknownFrames == params.FailedLimit+1 {
-		fmt.Println("The AI cannot identify the current screen; automatic inputs are suspended.")
+	if unknownFrames > params.FailedLimit {
+		fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
+		err := unstuck(win)
+		if err != nil {
+			return errors.Wrap(err, "failed to try to get unstuck")
+		}
 	}
 	return nil
 }
@@ -361,19 +323,4 @@ func contains(s []object.RecognizableObject, e object.RecognizableObject) bool {
 		}
 	}
 	return false
-}
-
-
-// pressFor holds a direction briefly when the platform backend supports it.
-// Other backends retain their existing single-press behavior.
-func pressFor(win sys.Window, key string, duration time.Duration) error {
-	if held, ok := win.(interface { PressFor(string, time.Duration) error }); ok {
-		return held.PressFor(key, duration)
-	}
-	return win.Press(key)
-}
-
-func abs(value int) int {
-	if value < 0 { return -value }
-	return value
 }
