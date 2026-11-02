@@ -31,8 +31,14 @@ var gridWidth, gridHeight int
 
 // MakeTiles creates a slice of tiles based on image dimensions
 func MakeTiles(img image.RGBA) ([]*Tile, error) {
+	if params.TileSize <= 0 {
+		return nil, errors.New("tile size must be greater than zero")
+	}
 	width := img.Bounds().Dx()
 	height := img.Bounds().Dy()
+	if width <= 0 || height <= 0 {
+		return nil, errors.New("cannot create a pathfinding grid from an empty image")
+	}
 	if len(tiles) == 0 || width != gridWidth || height != gridHeight {
 		gridWidth, gridHeight = width, height
 		rows = int(math.Ceil(float64(height) / float64(params.TileSize)))
@@ -139,7 +145,12 @@ func MapTiles(tiles []*Tile) map[image.Point]*Tile {
 
 // GetPath uses A* pathfinding to get the best route from one tile to another
 func GetPath(a *Tile, b *Tile) ([]*Tile, error) {
-	fmt.Println(a, "2:", b)
+	if a == nil || b == nil {
+		return nil, errors.New("pathfinding start or goal tile is missing")
+	}
+	if a.Cost >= 255 || b.Cost >= 255 {
+		return nil, errors.New("pathfinding start or goal tile is blocked")
+	}
 	path, _, found := astar.Path(a, b)
 	if !found {
 		return nil, errors.New("failed to find route")
@@ -155,13 +166,29 @@ func GetPath(a *Tile, b *Tile) ([]*Tile, error) {
 
 // GetGoal returns the tile that the pathfinding should aim for
 func GetGoal() *Tile {
-	middlePoint := image.Point{columns - 1, (rows - 1) / 2}
-	return tileMap[middlePoint] // The tile to the far right middle
+	if columns <= 0 || rows <= 0 || len(tileMap) == 0 {
+		return nil
+	}
+	middlePoint := image.Point{X: columns - 1, Y: (rows - 1) / 2}
+	goal := tileMap[middlePoint]
+	if goal != nil && goal.Cost >= 255 {
+		// Search outward from the intended exit tile for the nearest walkable tile.
+		var nearest *Tile
+		bestDistance := int(^uint(0) >> 1)
+		for _, tile := range tiles {
+			if tile.Cost >= 255 { continue }
+			dx, dy := tile.Coords.X-middlePoint.X, tile.Coords.Y-middlePoint.Y
+			distance := dx*dx + dy*dy
+			if distance < bestDistance { bestDistance, nearest = distance, tile }
+		}
+		return nearest
+	}
+	return goal
 }
 
 // GetCurrentTile finds the tile that a point is in the most
 func GetCurrentTile(fPoint image.Point) *Tile {
-
+	if len(tiles) == 0 { return nil }
 	var nearest *Tile
 	bestDistance := int(^uint(0) >> 1)
 	for _, tile := range tiles {
