@@ -16,3 +16,17 @@ This is also not supported yet as the project relies on the X11 window system. H
 
 ## TODO
 View tasks that need to be done at [the issue boards](https://gitlab.com/256/Underbot/boards?=)
+### Windows (port in progress)
+
+The `windows-port` branch contains a native Win32 backend and a small capture/input diagnostic. It is not yet a complete Windows build of the Underbot GUI: the main application still depends on GoCV/OpenCV and Ebiten, whose Windows toolchain and native libraries have not yet been integrated into the build pipeline.
+
+To build the backend diagnostic on Windows with Go 1.22 or newer:
+
+```powershell
+go build -o Underbot-Windows-BackendCheck.exe ./cmd/winbackendcheck
+.\Underbot-Windows-BackendCheck.exe
+```
+
+The diagnostic looks for the Undertale window (default title: `UNDERTALE`), captures its visible client area, and writes `underbot-window-test.png`. The game must be visible and in the foreground; this desktop capture does not read obscured or minimized windows. An optional exact window title can be passed as the first argument.
+
+The full application build will require a matching GoCV/OpenCV installation and a CGO-capable Windows compiler. See the [GoCV Windows installation guide](https://gocv.io/getting-started/windows/) for the native OpenCV toolchain.
