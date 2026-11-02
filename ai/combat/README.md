@@ -59,3 +59,23 @@ not guess ACT sequences, MERCY timing, ratings, or encounter identity. The
 caller must verify the encounter and game phase before acting; uncertain states
 must remain idle. A FIGHT timing-bar recognizer is also not implemented, and
 the route policy does not need it for ordinary encounters.
+
+## Route progress tracking
+
+`progress.go` adds a save-local True Pacifist checklist. The caller records
+milestones only after a positive recognition of the relevant game event. It
+enforces the order of Undyne's water/hangout, letter delivery and Alphys date,
+and requires zero EXP before marking the peaceful Mettaton EX ending or Neutral
+ending. The True Lab gate requires the Neutral ending, both friendships, water,
+peaceful Mettaton EX, letter delivery, Alphys date and zero EXP.
+
+EXP is monotonic in this tracker: `AddExperience` rejects negative values so
+a kill cannot be "undone" by the route model. The tracker is currently in-memory
+and has no save-file persistence or screen-based EXP reader; a future UI/status
+recognizer must populate and persist it from verified game state.
+
+Use `CanUseFightForProgress` as the only FIGHT authorization gate for the
+pre-Neutral Asgore/Flowey progression exception. The stateless
+`CanUseFightForRoute` compatibility guard fails closed because it cannot
+prove zero EXP or route stage. A controller must never treat
+`RouteDecision.AllowFight` alone as permission to send input.
