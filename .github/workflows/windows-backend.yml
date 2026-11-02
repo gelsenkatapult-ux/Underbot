@@ -19,13 +19,14 @@ jobs:
           go-version: '1.22.x'
           cache: true
       - name: Download backend dependency
-        run: go mod download github.com/pkg/errors
+        run: go mod download github.com/pkg/errors github.com/beefsack/go-astar
       - name: Compile native Windows backend and smoke-test utility
         shell: pwsh
         run: |
           $env:GOOS = 'windows'
           $env:GOARCH = 'amd64'
           $env:CGO_ENABLED = '0'
+          go test ./ai/...
           go build -v ./sys/Impl ./winmanage ./cmd/winbackendcheck
           go build -o Underbot-Windows-BackendCheck.exe ./cmd/winbackendcheck
       - name: Upload Windows backend check
