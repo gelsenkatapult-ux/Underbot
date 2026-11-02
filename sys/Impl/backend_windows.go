@@ -221,7 +221,7 @@ func (w window) Name() (string, error) {
 	return syscall.UTF16ToString(buf), nil
 }
 
-	func (w window) Resize(width, height int) error {
+func (w window) Resize(width, height int) error {
 	if err := w.valid(); err != nil { return err }
 	if width <= 0 || height <= 0 { return errors.New("window dimensions must be positive") }
 	if int64(width) > int64(^uint32(0)>>1) || int64(height) > int64(^uint32(0)>>1) {
