@@ -31,9 +31,17 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		object.RecMap["redHeart"],
 	})
 	if err != nil {
-
+		failedRetrieval++
+		if failedRetrieval > params.FailedLimit {
+			return errors.Wrap(err, "battle menu objects were not detected")
+		}
+		return nil
 	}
+	failedRetrieval = 0
 	recMap := Map(recObjects)
+	if len(recMap["battleOption"]) == 0 || len(recMap["redHeart"]) == 0 {
+		return nil
+	}
 
 	var farthest int
 	var fightOption object.RecognizedObject
@@ -91,7 +99,7 @@ func DialogueUpdate(objects []object.Object, win sys.Window, img *image.RGBA) er
 func InBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
 	heartObjects, err := GetWanted(objects, append([]object.RecognizableObject{}, object.Hearts...))
-	if len(heartObjects) == 0 {
+	if err != nil || len(heartObjects) == 0 {
 		// Stall until items can be found
 		failedRetrieval++
 		// If stalling takes too long, then try to get unstuck
@@ -139,17 +147,18 @@ func SaveUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error 
 		object.RecMap["saveBox"],
 	})
 	if err != nil {
-		// Stall until items can be found
 		failedRetrieval++
-		// If stalling takes too long, then try to get unstuck
 		if failedRetrieval > params.FailedLimit {
 			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-			unstuck(win)
+			return unstuck(win)
 		}
 		return nil
 	}
 	failedRetrieval = 0
 	recMap := Map(recObjects)
+	if len(recMap["redHeart"]) == 0 || len(recMap["saveBox"]) == 0 {
+		return nil
+	}
 
 	// Determines if the heart is on the left side, indicating that it is selecting save
 	if rect.RectangleCenter(recMap["redHeart"][0].Parent.Bounds).X < rect.RectangleCenter(recMap["saveBox"][0].Parent.Bounds).X {
