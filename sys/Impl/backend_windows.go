@@ -28,6 +28,10 @@ var (
 	procSetForegroundWindow    = user32.NewProc("SetForegroundWindow")
 	procSetWindowPos           = user32.NewProc("SetWindowPos")
 	procGetWindowThreadProcess = user32.NewProc("GetWindowThreadProcessId")
+	procOpenProcess            = syscall.NewLazyDLL("kernel32.dll").NewProc("OpenProcess")
+	procCloseHandle            = syscall.NewLazyDLL("kernel32.dll").NewProc("CloseHandle")
+	procNtSuspendProcess       = syscall.NewLazyDLL("ntdll.dll").NewProc("NtSuspendProcess")
+	procNtResumeProcess        = syscall.NewLazyDLL("ntdll.dll").NewProc("NtResumeProcess")
 	procSendInput              = user32.NewProc("SendInput")
 	procGetDC                  = user32.NewProc("GetDC")
 	procReleaseDC              = user32.NewProc("ReleaseDC")
@@ -50,6 +54,7 @@ const (
 	inputKeyboard   = 1
 	keyeventKeyup   = 0x0002
 	virtualKeyEnter = 0x0D
+	processSuspendResume = 0x0800
 )
 
 type winRect struct{ Left, Top, Right, Bottom int32 }
@@ -193,10 +198,26 @@ func (w window) Process() (*os.Process, error) {
 	return os.FindProcess(int(pid))
 }
 
-// Windows has no safe, portable equivalent of the Linux SIGSTOP/SIGCONT behavior.
-// These methods deliberately return an error instead of pretending the game was paused.
-func (w window) Pause() error { return errors.New("pausing the game process is not supported by the Windows backend") }
-func (w window) Resume() error { return errors.New("resuming the game process is not supported by the Windows backend") }
+// suspendOrResume uses the process suspend/resume routines and always closes
+// the process handle after the operation.
+func (w window) suspendOrResume(resume bool) error {
+	proc, err := w.Process()
+	if err != nil { return err }
+	handle, _, callErr := procOpenProcess.Call(processSuspendResume, 0, uintptr(proc.Pid))
+	if handle == 0 { return fmt.Errorf("OpenProcess failed: %v", callErr) }
+	defer procCloseHandle.Call(handle)
+	var status uintptr
+	if resume {
+		status, _, _ = procNtResumeProcess.Call(handle)
+	} else {
+		status, _, _ = procNtSuspendProcess.Call(handle)
+	}
+	if int32(status) < 0 { return fmt.Errorf("Windows process suspend/resume failed with NTSTATUS 0x%X", uint32(status)) }
+	return nil
+}
+
+func (w window) Pause() error { return w.suspendOrResume(false) }
+func (w window) Resume() error { return w.suspendOrResume(true) }
 
 func (w window) Press(key string) error {
 	if err := w.valid(); err != nil { return err }
