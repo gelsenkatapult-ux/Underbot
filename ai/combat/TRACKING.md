@@ -2,7 +2,8 @@
 
 This package provides a pure-Go first step toward real-time combat movement.
 
-- `Tracker.Update` associates caller-supplied projectile detections across frames.
+- `DetectProjectiles` extracts conservative color-connected candidates inside a supplied battle-box rectangle and supports player exclusion rectangles. This is an experimental candidate detector, not a trained sprite recognizer.
+- `Tracker.Update` associates detections across frames.
 - Tracks estimate horizontal and vertical velocity in pixels per second.
 - `ProjectileTrack.Predict` extrapolates a short, constant-velocity trajectory.
 - `ChooseDodge` evaluates nine short movement candidates against predicted
