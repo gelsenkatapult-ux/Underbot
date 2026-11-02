@@ -53,7 +53,7 @@ func (t *Tracker) Update(observations []ProjectileObservation, now time.Time) []
 		center := rectCenter(obs.Bounds)
 		best, bestDistance := -1, math.MaxFloat64
 		for i, old := range t.Tracks {
-			if used[i] { continue }
+			if used[i] || old.Class != obs.Class { continue }
 			d := pointDistance(center, old.Center)
 			if d < bestDistance && d <= t.MaxMatchDistance { best, bestDistance = i, d }
 		}
