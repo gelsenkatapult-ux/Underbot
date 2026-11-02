@@ -174,11 +174,14 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $gcc = Get-ChildItem C:\mingw -Filter gcc.exe -Recurse | Select-Object -First 1
-          if (-not $gcc) { throw 'MinGW-w64 is missing although the OpenCV cache was restored.' }
-          $mingwBin = $gcc.Directory.FullName
+          $mingwBin = $env:MINGW_BIN
+          if (-not $mingwBin -or -not (Test-Path (Join-Path $mingwBin 'gcc.exe'))) {
+            throw 'MinGW-w64 compiler path was not preserved from toolchain installation.'
+          }
+          if (-not (Test-Path (Join-Path $mingwBin 'g++.exe'))) {
+            throw 'MinGW-w64 C++ compiler is missing.'
+          }
           $mingwBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          "MINGW_BIN=$mingwBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CGO_ENABLED=1' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'CGO_CXXFLAGS=--std=c++11' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'C:\opencv\build\install\x64\mingw\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
@@ -234,14 +237,20 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $opencvBin = 'C:\opencv\build\install\x64\mingw\bin'
-          $gcc = Get-ChildItem C:\mingw -Filter gcc.exe -Recurse | Select-Object -First 1
-          if (-not $gcc) { throw 'Could not locate MinGW runtime DLL directory.' }
-          $mingwBin = $gcc.Directory.FullName
+          $mingwBin = $env:MINGW_BIN
+          if (-not $mingwBin -or -not (Test-Path (Join-Path $mingwBin 'gcc.exe'))) {
+            throw 'Could not locate the selected MinGW runtime directory.'
+          }
           Get-ChildItem $opencvBin -Filter '*.dll' | Copy-Item -Destination dist -Force
           $runtimeNames = @('libgcc_s_seh-1.dll','libstdc++-6.dll','libwinpthread-1.dll','libgomp-1.dll','libatomic-1.dll')
           foreach ($name in $runtimeNames) {
             $source = Join-Path $mingwBin $name
             if (Test-Path $source) { Copy-Item $source -Destination dist -Force }
+          }
+          foreach ($required in @('opencv_core342.dll','libstdc++-6.dll','libgcc_s_seh-1.dll','libwinpthread-1.dll')) {
+            if (-not (Test-Path (Join-Path dist $required))) {
+              throw "Required runtime DLL was not bundled: $required"
+            }
           }
           New-Item -ItemType Directory -Force dist\licenses | Out-Null
           Copy-Item C:\opencv\opencv-3.4.2\LICENSE dist\licenses\OpenCV-LICENSE.txt
