@@ -71,9 +71,10 @@ prototype AI:
   turns the shield toward the nearest detected hazard.
 - Pacifist mode is enabled by default. The four-button battle menu is ordered
   by screen position; the bot alternates ACT turns with attempts to Spare.
-  Text-only submenus confirm their first entry (the default Spare entry in the
-  Mercy submenu). The automatic fight-timing confirmation is disabled in this
-  mode, and unknown-state recovery only presses directional keys. A recognized Game Over screen disables the AI instead of continuing to issue inputs.
+  It confirms up to two expected submenu entries (for example, a target
+  selection followed by the first ACT/Spare entry). The automatic fight-timing
+  confirmation is disabled in this mode, unknown-state recovery only presses
+  directional keys, and a recognized Game Over screen disables the AI.
 
 These behaviours are deliberately conservative prototypes, not a certified
 playthrough system. Projectile detection can miss attacks or mistake visual
