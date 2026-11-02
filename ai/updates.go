@@ -459,3 +459,15 @@ func contains(s []object.RecognizableObject, e object.RecognizableObject) bool {
 	}
 	return false
 }
+
+ 
+// GameOverUpdate disables automated input as soon as the game-over screen is
+// recognized. This prevents directional recovery from issuing meaningless
+// inputs after a failed run.
+func GameOverUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
+	if !Disabled {
+		fmt.Println("Undertale Game Over detected. Underbot has disabled the AI.")
+	}
+	Disabled = true
+	return nil
+}
