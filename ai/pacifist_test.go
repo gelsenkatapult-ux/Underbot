@@ -2,7 +2,6 @@ package ai
 
 import (
 	"image"
-	"image/color"
 	"os"
 	"testing"
 
@@ -32,36 +31,21 @@ func TestPacifistOptionIndex(t *testing.T) {
 	tests := []struct {
 		name             string
 		count            int
-		mercyHighlighted bool
+		chooseMercy bool
 		want             int
 	}{
 		{"main menu prefers ACT", 4, false, 1},
-		{"main menu chooses highlighted MERCY", 4, true, 3},
+		{"every other main-menu turn tries MERCY", 4, true, 3},
 		{"short ACT submenu chooses first action", 2, false, 0},
 		{"single option", 1, false, 0},
 		{"empty options", 0, false, 0},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := pacifistOptionIndex(test.count, test.mercyHighlighted); got != test.want {
+			if got := pacifistOptionIndex(test.count, test.chooseMercy); got != test.want {
 				t.Fatalf("pacifistOptionIndex(%d, %t) = %d, want %d", test.count, test.mercyHighlighted, got, test.want)
 			}
 		})
-	}
-}
-
-func TestHasYellowMenuText(t *testing.T) {
-	img := image.NewRGBA(image.Rect(0, 0, 180, 60))
-	button := image.Rect(20, 10, 130, 50)
-	if hasYellowMenuText(img, button) {
-		t.Fatal("black button unexpectedly detected as highlighted")
-	}
-	yellow := color.RGBA{R: 255, G: 255, B: 0, A: 255}
-	for i := 0; i < 6; i++ {
-		img.Set(40+i, 25, yellow)
-	}
-	if !hasYellowMenuText(img, button) {
-		t.Fatal("yellow label pixels were not detected")
 	}
 }
 
@@ -96,10 +80,16 @@ func menuObject(id int, name string, bounds image.Rectangle) object.Object {
 	}
 }
 
-func TestBattleMenuSelectsACTWhenMercyIsNotHighlighted(t *testing.T) {
-	old := PacifistMode
+func TestBattleMenuSelectsACTOnFirstMainMenuTurn(t *testing.T) {
+	oldMode, oldTurns, oldCooldown := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames
 	PacifistMode = true
-	defer func() { PacifistMode = old }()
+	pacifistMainMenuTurns = 0
+	battleMenuCooldownFrames = 0
+	defer func() {
+		PacifistMode = oldMode
+		pacifistMainMenuTurns = oldTurns
+		battleMenuCooldownFrames = oldCooldown
+	}()
 
 	objects := []object.Object{
 		menuObject(1, "battleOption", image.Rect(10, 10, 117, 49)),
@@ -117,10 +107,16 @@ func TestBattleMenuSelectsACTWhenMercyIsNotHighlighted(t *testing.T) {
 	}
 }
 
-func TestBattleMenuChoosesMercyWhenYellowAndAligned(t *testing.T) {
-	old := PacifistMode
+func TestBattleMenuAlternatesToMercyAfterACTTurn(t *testing.T) {
+	oldMode, oldTurns, oldCooldown := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames
 	PacifistMode = true
-	defer func() { PacifistMode = old }()
+	pacifistMainMenuTurns = 1
+	battleMenuCooldownFrames = 0
+	defer func() {
+		PacifistMode = oldMode
+		pacifistMainMenuTurns = oldTurns
+		battleMenuCooldownFrames = oldCooldown
+	}()
 
 	objects := []object.Object{
 		menuObject(1, "battleOption", image.Rect(10, 10, 117, 49)),
@@ -130,15 +126,37 @@ func TestBattleMenuChoosesMercyWhenYellowAndAligned(t *testing.T) {
 		menuObject(5, "redHeart", image.Rect(475, 20, 490, 35)),
 	}
 	img := image.NewRGBA(image.Rect(0, 0, 640, 480))
-	for i := 0; i < 6; i++ {
-		img.Set(470+i, 28, color.RGBA{R: 255, G: 255, A: 255})
-	}
 	window := &pacifistTestWindow{}
 	if err := BattleMenuUpdate(objects, window, img); err != nil {
 		t.Fatal(err)
 	}
 	if len(window.keys) != 1 || window.keys[0] != "z" {
-		t.Fatalf("menu input = %v, want [z] to confirm highlighted MERCY", window.keys)
+		t.Fatalf("menu input = %v, want [z] to confirm the scheduled MERCY attempt", window.keys)
+	}
+}
+
+func TestPacifistTextOnlySubmenuConfirmsOnceAndSetsCooldown(t *testing.T) {
+	oldMode, oldTurns, oldCooldown := PacifistMode, pacifistMainMenuTurns, battleMenuCooldownFrames
+	PacifistMode = true
+	pacifistMainMenuTurns = 1
+	battleMenuCooldownFrames = 0
+	defer func() {
+		PacifistMode = oldMode
+		pacifistMainMenuTurns = oldTurns
+		battleMenuCooldownFrames = oldCooldown
+	}()
+	objects := []object.Object{
+		menuObject(5, "redHeart", image.Rect(180, 80, 195, 95)),
+	}
+	window := &pacifistTestWindow{}
+	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
+		t.Fatal(err)
+	}
+	if len(window.keys) != 1 || window.keys[0] != "z" {
+		t.Fatalf("submenu input = %v, want one Z for first (Spare) entry", window.keys)
+	}
+	if battleMenuCooldownFrames == 0 {
+		t.Fatal("submenu confirmation did not set a cooldown")
 	}
 }
 
