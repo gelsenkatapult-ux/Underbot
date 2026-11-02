@@ -34,7 +34,6 @@ jobs:
           key: opencv-342-mingw63-x64-v1
 
       - name: Install original MinGW-w64 toolchain
-        if: steps.opencv-cache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
