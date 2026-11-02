@@ -73,7 +73,7 @@ prototype AI:
   by screen position; the bot alternates ACT turns with attempts to Spare.
   Text-only submenus confirm their first entry (the default Spare entry in the
   Mercy submenu). The automatic fight-timing confirmation is disabled in this
-  mode, and unknown-state recovery only presses directional keys.
+  mode, and unknown-state recovery only presses directional keys. A recognized Game Over screen disables the AI instead of continuing to issue inputs.
 
 These behaviours are deliberately conservative prototypes, not a certified
 playthrough system. Projectile detection can miss attacks or mistake visual
