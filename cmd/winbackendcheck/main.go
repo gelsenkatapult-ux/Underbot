@@ -12,15 +12,15 @@ import (
 )
 
 func main() {
-	server, err := impl.NewServer()
-	if err != nil {
-		fail(err)
+	title := "UNDERTALE"
+	if len(os.Args) > 1 {
+		title = os.Args[1]
 	}
-	window, err := server.ActiveWindow()
+	window, err := impl.FindWindowByTitle(title)
 	if err != nil {
-		fail(err)
+		fail(fmt.Errorf("could not find game window %q; pass its exact title as the first argument: %w", title, err))
 	}
-	title, err := window.Name()
+	name, err := window.Name()
 	if err != nil {
 		fail(err)
 	}
@@ -44,7 +44,7 @@ func main() {
 	if err := file.Close(); err != nil {
 		fail(err)
 	}
-	fmt.Printf("Window: %s\nClient size: %dx%d\nScreenshot: %s\n", title, width, height, output)
+	fmt.Printf("Window: %s\nClient size: %dx%d\nScreenshot: %s\n", name, width, height, output)
 }
 
 func fail(err error) {
