@@ -26,6 +26,9 @@ func genUpdate() {
 	if battleMenuCooldownFrames > 0 {
 		battleMenuCooldownFrames--
 	}
+	if saveMenuCooldownFrames > 0 {
+		saveMenuCooldownFrames--
+	}
 }
 
 // BattleMenuUpdate only acts on a fully recognized four-button main menu or
@@ -222,6 +225,9 @@ var failedRetrieval int
 // SaveUpdate is the function that presses the save button
 func SaveUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
+	if saveMenuCooldownFrames > 0 {
+		return nil
+	}
 	recObjects, err := GetWanted(objects, []object.RecognizableObject{
 		object.RecMap["redHeart"],
 		object.RecMap["saveBox"],
@@ -263,8 +269,12 @@ func SaveUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error 
 			return errors.Wrap(err, "failed to press z key")
 		}
 	}
+	saveMenuCooldownFrames = 45
 	return nil
 }
+
+// saveMenuCooldownFrames prevents rapid repeated confirmation at the save screen.
+var saveMenuCooldownFrames int
 
 // interactionCooldownFrames prevents repeated interaction inputs from being
 // sent on every rendered frame while Frisk is standing next to an object.
