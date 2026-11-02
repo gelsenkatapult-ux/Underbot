@@ -26,7 +26,7 @@ func pacifistOptionIndex(optionCount int, chooseMercy bool) int {
 		if chooseMercy {
 			return optionCount - 1
 		}
-		return 1 // ACT is the second option in Undertale's main battle menu.
+		return 1 // ACT is the second option in Undertale's main battle menu; the final option is MERCY.
 	}
 	// In an ACT submenu, prefer the first listed action rather than a random
 	// menu entry. Game-specific ACT text still needs explicit recognition.
