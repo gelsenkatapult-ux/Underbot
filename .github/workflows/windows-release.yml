@@ -3,6 +3,7 @@ name: Windows full application and release
 on:
   workflow_dispatch:
   push:
+    branches: [windows-port]
     tags:
       - 'windows-v*'
 
@@ -39,15 +40,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if (!(Get-Command 7z -ErrorAction SilentlyContinue)) {
             choco install 7zip --yes --no-progress
+            $env:Path = "$env:Path;C:\Program Files\7-Zip"
           }
-          if (!(Get-Command cmake -ErrorAction SilentlyContinue)) {
-            $cmakeZip = Join-Path $env:RUNNER_TEMP 'cmake-3.27.9-windows-x86_64.zip'
-            Invoke-WebRequest 'https://github.com/Kitware/CMake/releases/download/v3.27.9/cmake-3.27.9-windows-x86_64.zip' -OutFile $cmakeZip
-            Expand-Archive $cmakeZip -DestinationPath $env:RUNNER_TEMP
-            $cmakeBin = Join-Path $env:RUNNER_TEMP 'cmake-3.27.9-windows-x86_64\bin'
-            Add-Content $env:GITHUB_PATH $cmakeBin
-            $env:Path = "$cmakeBin;$env:Path"
-          }
+          $cmakeZip = Join-Path $env:RUNNER_TEMP 'cmake-3.27.9-windows-x86_64.zip'
+          Invoke-WebRequest 'https://github.com/Kitware/CMake/releases/download/v3.27.9/cmake-3.27.9-windows-x86_64.zip' -OutFile $cmakeZip
+          Expand-Archive $cmakeZip -DestinationPath $env:RUNNER_TEMP -Force
+          $cmakeBin = Join-Path $env:RUNNER_TEMP 'cmake-3.27.9-windows-x86_64\bin'
+          Add-Content $env:GITHUB_PATH $cmakeBin
+          $env:Path = "$cmakeBin;$env:Path"
 
           $gcc = Get-ChildItem 'C:\mingw-w64' -Filter gcc.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (!$gcc) {
