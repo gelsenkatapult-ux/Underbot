@@ -100,7 +100,7 @@ func chooseSafeBattlePoint(arena image.Rectangle, player image.Point, hazards []
 	}
 
 	best := player
-	bestScore := nearestHazardDistance(player, hazards) - math.Hypot(float64(player.X-player.X), float64(player.Y-player.Y))*0.25
+	bestScore := nearestHazardDistance(player, hazards)
 	const columns, rows = 7, 5
 	for row := 0; row < rows; row++ {
 		for column := 0; column < columns; column++ {
