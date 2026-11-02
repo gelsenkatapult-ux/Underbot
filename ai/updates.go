@@ -46,34 +46,29 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		return nil
 	}
 
-	var farthest int
-	var fightOption object.RecognizedObject
-	for i, option := range recMap["battleOption"] {
-		if i == 0 {
-			farthest = option.Parent.ID
-			fightOption = option
-			continue
-		}
-		if farthest < option.Parent.ID {
-			farthest = option.Parent.ID
-			fightOption = option
-		}
+	options := make([]image.Rectangle, 0, len(recMap["battleOption"]))
+	for _, option := range recMap["battleOption"] {
+		options = append(options, option.Parent.Bounds)
+	}
+	target, ok := combat.PacifistMenuTarget(options)
+	if !ok {
+		// Unknown menu layout: never fall back to FIGHT or confirm a choice.
+		return nil
 	}
 
-	redHeart := rect.RectangleCenter(recMap["redHeart"][0].Parent.Bounds)
-	fightCenter := rect.RectangleCenter(fightOption.Parent.Bounds)
-
-	if redHeart.X > fightCenter.X {
-		err := win.Press("left")
-		if err != nil {
-			return errors.Wrap(err, "couldn't press left arrow key")
+	heart := rect.RectangleCenter(recMap["redHeart"][0].Parent.Bounds)
+	const selectionTolerance = 18
+	if heart.X < target.X-selectionTolerance {
+		if err := win.Press("right"); err != nil {
+			return errors.Wrap(err, "couldn't move to ACT")
 		}
-	} else {
-		err := win.Press("z")
-		if err != nil {
-			return errors.Wrap(err, "couldn't press z key")
+	} else if heart.X > target.X+selectionTolerance {
+		if err := win.Press("left"); err != nil {
+			return errors.Wrap(err, "couldn't move to ACT")
 		}
 	}
+	// Intentionally do not press Z here. The ACT submenu and its text are not
+	// recognized yet, so confirming could select an unsafe or unknown action.
 
 	return nil
 }
