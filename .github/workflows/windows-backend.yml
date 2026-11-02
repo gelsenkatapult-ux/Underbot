@@ -19,7 +19,7 @@ jobs:
           go-version: '1.22.x'
           cache: true
       - name: Download backend dependency
-        run: go mod download github.com/pkg/errors github.com/beefsack/go-astar
+        run: go mod download
       - name: Compile native Windows backend and smoke-test utility
         shell: pwsh
         run: |
