@@ -41,6 +41,18 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $gcc = Get-ChildItem C:\mingw -Filter gcc.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
 
+          # Prefer a compatible MinGW already present on the hosted runner.
+          # Some runner images expose GCC separately from the C:\mingw folder.
+          if (-not $gcc) {
+            $pathGcc = Get-Command gcc.exe -ErrorAction SilentlyContinue
+            if ($pathGcc) {
+              $target = (& $pathGcc.Source -dumpmachine 2>$null | Select-Object -First 1).Trim()
+              if ($target -eq 'x86_64-w64-mingw32') {
+                $gcc = Get-Item $pathGcc.Source
+              }
+            }
+          }
+
           if (-not $gcc) {
             $archive = Join-Path $env:RUNNER_TEMP 'mingw-6.3.0.7z'
             $relative = 'Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/6.3.0/threads-posix/seh/x86_64-6.3.0-release-posix-seh-rt_v5-rev1.7z'
@@ -60,7 +72,7 @@ jobs:
               try {
                 Remove-Item $archive -Force -ErrorAction SilentlyContinue
                 Write-Host "Trying MinGW mirror: $mirror"
-                Invoke-WebRequest -Uri $url -OutFile $archive -Headers @{ 'User-Agent' = 'Underbot-Windows-Build/1.0' } -TimeoutSec 90
+                Invoke-WebRequest -Uri $url -OutFile $archive -Headers @{ 'User-Agent' = 'Underbot-Windows-Build/1.0' } -TimeoutSec 35
                 $bytes = [System.IO.File]::ReadAllBytes($archive)
                 $signature = ($bytes[0..5] | ForEach-Object { $_.ToString('X2') }) -join ''
                 if ($bytes.Length -gt 30000000 -and $signature -eq '377ABCAF271C') {
