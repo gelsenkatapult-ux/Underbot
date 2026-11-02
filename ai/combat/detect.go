@@ -74,7 +74,7 @@ func classifyAttackColor(c color.RGBA) AttackClass {
 	if g < min { min = g }; if b < min { min = b }
 	if min >= 220 && max-min <= 35 { return AttackWhite }
 	if min >= 70 && max <= 190 && max-min <= 24 { return AttackGray }
-	if r >= 180 && g <= 100 && b <= 110 { return AttackWhite } // red attacks are damaging unless a verified warning glyph is known
+	if r >= 180 && g <= 100 && b <= 110 { return AttackRed }
 	if g >= 155 && r <= 130 && b <= 155 { return AttackGreen }
 	if b >= 155 && g >= 125 && r <= 125 { return AttackLightBlue }
 	if r >= 180 && g >= 80 && g <= 190 && b <= 110 { return AttackOrange }
