@@ -27,28 +27,28 @@ var columns int
 
 var tiles []*Tile
 var tileMap map[image.Point]*Tile
+var gridWidth, gridHeight int
 
 // MakeTiles creates a slice of tiles based on image dimensions
 func MakeTiles(img image.RGBA) ([]*Tile, error) {
-	if len(tiles) == 0 {
-		// Needed for the amount of rows and columns needed
-		width := img.Bounds().Dx()
-		height := img.Bounds().Dy()
-		rows = int(math.Ceil(float64(height / params.TileSize)))
-		columns = int(math.Ceil(float64(width / params.TileSize)))
-
+	width := img.Bounds().Dx()
+	height := img.Bounds().Dy()
+	if len(tiles) == 0 || width != gridWidth || height != gridHeight {
+		gridWidth, gridHeight = width, height
+		rows = int(math.Ceil(float64(height) / float64(params.TileSize)))
+		columns = int(math.Ceil(float64(width) / float64(params.TileSize)))
+		tiles = nil
+		tileMap = nil
 		for r := 0; r < rows; r++ {
 			for c := 0; c < columns; c++ {
-				tileRect := image.Rect(
-					(c*params.TileSize)-params.TileSize,
-					(r*params.TileSize)-params.TileSize,
-					(c * params.TileSize),
-					(r * params.TileSize))
+				left, top := c*params.TileSize, r*params.TileSize
+				right, bottom := left+params.TileSize, top+params.TileSize
+				if right > width { right = width }
+				if bottom > height { bottom = height }
+				tileRect := image.Rect(left, top, right, bottom)
 				newTile := Tile{Pos: fmt.Sprintf("(%v, %v)", r, c), Rectangle: tileRect, Coords: image.Point{X: c, Y: r}, Color: params.TileColor}
 				cost, err := newTile.GetCost(img)
-				if err != nil {
-					return []*Tile{}, errors.Wrap(err, "failed to calculate the cost")
-				}
+				if err != nil { return []*Tile{}, errors.Wrap(err, "failed to calculate the cost") }
 				newTile.Cost = cost
 				tiles = append(tiles, &newTile)
 			}
@@ -89,12 +89,18 @@ func (t *Tile) PathNeighbors() []astar.Pather {
 	tileX := t.Coords.X
 	tileY := t.Coords.Y
 
-	return []astar.Pather{
-		tileMap[image.Point{tileX, tileY - 1}], // Up
-		tileMap[image.Point{tileX + 1, tileY}], // Right
-		tileMap[image.Point{tileX, tileY + 1}], // Down
-		tileMap[image.Point{tileX - 1, tileY}], // Left
+	neighbors := []astar.Pather{}
+	for _, point := range []image.Point{
+		{X: tileX, Y: tileY - 1},
+		{X: tileX + 1, Y: tileY},
+		{X: tileX, Y: tileY + 1},
+		{X: tileX - 1, Y: tileY},
+	} {
+		if neighbor := tileMap[point]; neighbor != nil && neighbor.Cost < 255 {
+			neighbors = append(neighbors, neighbor)
+		}
 	}
+	return neighbors
 }
 
 // GetImage shows the image inside of a tile. The function should be passed the image of the whole screen
@@ -103,7 +109,7 @@ func (t *Tile) GetImage(screen image.RGBA) image.Image {
 }
 
 func (t *Tile) PathNeighborCost(to astar.Pather) float64 {
-	return 1
+	return float64(to.(*Tile).Cost + 1)
 }
 
 func (t *Tile) PathEstimatedCost(to astar.Pather) float64 {
@@ -156,25 +162,21 @@ func GetGoal() *Tile {
 // GetCurrentTile finds the tile that a point is in the most
 func GetCurrentTile(fPoint image.Point) *Tile {
 
-	var smallest *Tile
-	var smallSize int
-
-	// Calculate the smallest rectangle containing Frisk and the nearest tile
-	for i, tile := range tiles {
-		fRect := image.Rect(fPoint.X, fPoint.Y, fPoint.X+1, fPoint.Y+1)
-		unionRect := tile.Rectangle.Union(fRect)
-		averageSize := rect.AverageSize(unionRect)
-		if i == 0 {
-			smallest = tile
-			smallSize = averageSize
-		} else {
-			if averageSize < smallSize {
-				smallSize = averageSize
-				smallest = tile
-			}
+	var nearest *Tile
+	bestDistance := math.MaxInt
+	for _, tile := range tiles {
+		if fPoint.In(tile.Rectangle) {
+			tile.Color = color.RGBA{22, 193, 0, 255}
+			return tile
+		}
+		center := rect.RectangleCenter(tile.Rectangle)
+		dx, dy := center.X-fPoint.X, center.Y-fPoint.Y
+		distance := dx*dx + dy*dy
+		if distance < bestDistance {
+			bestDistance = distance
+			nearest = tile
 		}
 	}
-	//fmt.Println(smallest)
-	smallest.Color = color.RGBA{22, 193, 0, 255}
-	return smallest
+	if nearest != nil { nearest.Color = color.RGBA{22, 193, 0, 255} }
+	return nearest
 }
