@@ -9,172 +9,286 @@ import (
 	"github.com/beefsack/go-astar"
 	"github.com/pkg/errors"
 	"gitlab.com/256/Underbot/cv/params"
-	"gitlab.com/256/Underbot/cv/rect"
 )
 
-// Tile is a section of the screen for pathfinding
+// Tile is one bounded section of the game image used for path planning.
 type Tile struct {
-	Pos       string      // String representation of the position. Ex: (1, 3)
-	Coords    image.Point // The number representation of the above. This is not in pixels
+	Pos       string
+	Coords    image.Point
 	Rectangle image.Rectangle
-	Color     color.Color // What color the tile should be rendered with
-	Cost      int         // How long it takes to get past the tile
+	Color     color.Color
+	Cost      int
+
+	grid *Grid
 }
 
-// How many rows and columns there are of tiles
-var rows int
-var columns int
+// Grid owns one image's pathfinding tiles. Unlike the original package-global
+// grid, each screenshot gets fresh dimensions and bounds.
+type Grid struct {
+	Bounds   image.Rectangle
+	TileSize int
+	Tiles    []*Tile
+	byCoords map[image.Point]*Tile
+}
 
-var tiles []*Tile
-var tileMap map[image.Point]*Tile
+const blockedTileCost = 255
 
-// MakeTiles creates a slice of tiles based on image dimensions
-func MakeTiles(img image.RGBA) ([]*Tile, error) {
-	if len(tiles) == 0 {
-		// Needed for the amount of rows and columns needed
-		width := img.Bounds().Dx()
-		height := img.Bounds().Dy()
-		rows = int(math.Ceil(float64(height / params.TileSize)))
-		columns = int(math.Ceil(float64(width / params.TileSize)))
+// NewGrid builds a clipped grid over the actual image bounds. The previous
+// implementation created its first row/column at negative coordinates, used
+// integer division before Ceil, and retained stale tiles if dimensions changed.
+func NewGrid(img image.Image, tileSize int) (*Grid, error) {
+	if img == nil {
+		return nil, errors.New("cannot build a pathfinding grid from a nil image")
+	}
+	if tileSize <= 0 {
+		return nil, errors.New("tile size must be greater than zero")
+	}
+	bounds := img.Bounds()
+	if bounds.Empty() {
+		return nil, errors.New("cannot build a pathfinding grid from an empty image")
+	}
 
-		for r := 0; r < rows; r++ {
-			for c := 0; c < columns; c++ {
-				tileRect := image.Rect(
-					(c*params.TileSize)-params.TileSize,
-					(r*params.TileSize)-params.TileSize,
-					(c * params.TileSize),
-					(r * params.TileSize))
-				newTile := Tile{Pos: fmt.Sprintf("(%v, %v)", r, c), Rectangle: tileRect, Coords: image.Point{X: c, Y: r}, Color: params.TileColor}
-				cost, err := newTile.GetCost(img)
-				if err != nil {
-					return []*Tile{}, errors.Wrap(err, "failed to calculate the cost")
-				}
-				newTile.Cost = cost
-				tiles = append(tiles, &newTile)
+	rows := int(math.Ceil(float64(bounds.Dy()) / float64(tileSize)))
+	columns := int(math.Ceil(float64(bounds.Dx()) / float64(tileSize)))
+	grid := &Grid{
+		Bounds:   bounds,
+		TileSize: tileSize,
+		byCoords: make(map[image.Point]*Tile, rows*columns),
+		Tiles:    make([]*Tile, 0, rows*columns),
+	}
+
+	for row := 0; row < rows; row++ {
+		for column := 0; column < columns; column++ {
+			minX := bounds.Min.X + column*tileSize
+			minY := bounds.Min.Y + row*tileSize
+			rect := image.Rect(minX, minY, minX+tileSize, minY+tileSize).Intersect(bounds)
+			if rect.Empty() {
+				continue
+			}
+			tile := &Tile{
+				Pos:       fmt.Sprintf("(%d, %d)", row, column),
+				Coords:    image.Pt(column, row),
+				Rectangle: rect,
+				Color:     params.TileColor,
+				grid:      grid,
+			}
+			tile.Cost = tileCost(img, rect)
+			if tile.Cost >= blockedTileCost {
+				tile.Color = color.RGBA{R: 255, A: 255}
+			}
+			grid.Tiles = append(grid.Tiles, tile)
+			grid.byCoords[tile.Coords] = tile
+		}
+	}
+	return grid, nil
+}
+
+// tileCost samples a 3x3 pattern in a tile. A majority of black samples marks
+// a wall/obstacle; sampling only one centre pixel made narrow contours and
+// anti-aliased edges unstable.
+func tileCost(img image.Image, bounds image.Rectangle) int {
+	black := 0
+	for _, fy := range []int{1, 2, 3} {
+		for _, fx := range []int{1, 2, 3} {
+			x := bounds.Min.X + (bounds.Dx()*fx)/4
+			y := bounds.Min.Y + (bounds.Dy()*fy)/4
+			if x >= bounds.Max.X {
+				x = bounds.Max.X - 1
+			}
+			if y >= bounds.Max.Y {
+				y = bounds.Max.Y - 1
+			}
+			r, g, b, _ := img.At(x, y).RGBA()
+			if r == 0 && g == 0 && b == 0 {
+				black++
 			}
 		}
-	} else {
-		for _, tile := range tiles {
-			cost, err := tile.GetCost(img)
-			if err != nil {
-				return []*Tile{}, errors.Wrap(err, "failed to calculate the cost")
-			}
-			tile.Cost = cost
+	}
+	if black >= 5 {
+		return blockedTileCost
+	}
+	return 0
+}
+
+// TileAt returns the tile containing a point, or nil when the point is outside
+// the image bounds.
+func (g *Grid) TileAt(point image.Point) *Tile {
+	if g == nil || !point.In(g.Bounds) {
+		return nil
+	}
+	coords := image.Pt(
+		(point.X-g.Bounds.Min.X)/g.TileSize,
+		(point.Y-g.Bounds.Min.Y)/g.TileSize,
+	)
+	return g.byCoords[coords]
+}
+
+// ClosestWalkableTile returns the walkable tile whose centre is nearest to the
+// requested point. This also handles goals that fall on the black outline of
+// an interactable sprite or doorway.
+func (g *Grid) ClosestWalkableTile(point image.Point) *Tile {
+	if g == nil {
+		return nil
+	}
+	var best *Tile
+	bestDistance := int(^uint(0) >> 1)
+	for _, tile := range g.Tiles {
+		if tile.Cost >= blockedTileCost {
+			continue
+		}
+		dx := tile.Center().X - point.X
+		dy := tile.Center().Y - point.Y
+		distance := dx*dx + dy*dy
+		if distance < bestDistance {
+			best = tile
+			bestDistance = distance
 		}
 	}
-	if len(tileMap) == 0 {
-		tileMap = MapTiles(tiles)
-	}
-	return tiles, nil
+	return best
 }
 
-// GetCost calculates the movement cost for a tile
-func (t *Tile) GetCost(screen image.RGBA) (int, error) {
-	centerColor, err := rect.CenterColor(t.GetImage(screen))
-	if err != nil {
-		return 0, errors.Wrap(err, "could not get the center color")
+// RightEdgeGoal is the original prototype's default room-exit target, now
+// constrained to a walkable tile that actually lies inside the screenshot.
+func (g *Grid) RightEdgeGoal() *Tile {
+	if g == nil {
+		return nil
 	}
-
-	// If the tile is black, then set cost to 255, because it's impossible to go there
-	if (centerColor == color.RGBA{0, 0, 0, 255}) {
-		t.Color = color.RGBA{255, 0, 0, 255}
-		return 255, nil
-	}
-	t.Color = params.TileColor
-	return 0, nil
+	return g.ClosestWalkableTile(image.Pt(g.Bounds.Max.X-1, g.Bounds.Min.Y+g.Bounds.Dy()/2))
 }
 
-// PathNeighbors returns a slice of the tiles neighboring a tile
-func (t *Tile) PathNeighbors() []astar.Pather {
-	tileX := t.Coords.X
-	tileY := t.Coords.Y
-
-	return []astar.Pather{
-		tileMap[image.Point{tileX, tileY - 1}], // Up
-		tileMap[image.Point{tileX + 1, tileY}], // Right
-		tileMap[image.Point{tileX, tileY + 1}], // Down
-		tileMap[image.Point{tileX - 1, tileY}], // Left
+// Center returns the centre pixel of a tile.
+func (t *Tile) Center() image.Point {
+	if t == nil {
+		return image.Point{}
 	}
+	return image.Pt(t.Rectangle.Min.X+t.Rectangle.Dx()/2, t.Rectangle.Min.Y+t.Rectangle.Dy()/2)
 }
 
-// GetImage shows the image inside of a tile. The function should be passed the image of the whole screen
+// GetImage returns the part of the screenshot represented by this tile.
 func (t *Tile) GetImage(screen image.RGBA) image.Image {
 	return screen.SubImage(t.Rectangle)
 }
 
+// PathNeighbors returns only existing, walkable 4-way neighbors. The original
+// returned nil neighbors at edges and did not prevent A* from traversing walls.
+func (t *Tile) PathNeighbors() []astar.Pather {
+	if t == nil || t.grid == nil {
+		return nil
+	}
+	offsets := [...]image.Point{
+		image.Pt(0, -1),
+		image.Pt(1, 0),
+		image.Pt(0, 1),
+		image.Pt(-1, 0),
+	}
+	neighbors := make([]astar.Pather, 0, 4)
+	for _, offset := range offsets {
+		neighbor := t.grid.byCoords[t.Coords.Add(offset)]
+		if neighbor != nil && neighbor.Cost < blockedTileCost {
+			neighbors = append(neighbors, neighbor)
+		}
+	}
+	return neighbors
+}
+
 func (t *Tile) PathNeighborCost(to astar.Pather) float64 {
-	return 1
+	next, ok := to.(*Tile)
+	if !ok || next == nil {
+		return math.Inf(1)
+	}
+	return 1 + float64(next.Cost)
 }
 
 func (t *Tile) PathEstimatedCost(to astar.Pather) float64 {
-	if t == nil {
-		return 255
+	next, ok := to.(*Tile)
+	if t == nil || !ok || next == nil {
+		return math.Inf(1)
 	}
-	toT := to.(*Tile)
-	absX := t.Coords.X - toT.Coords.X
-	if absX < 0 {
-		absX = -absX
+	dx := t.Coords.X - next.Coords.X
+	dy := t.Coords.Y - next.Coords.Y
+	if dx < 0 {
+		dx = -dx
 	}
-	absY := t.Coords.Y - toT.Coords.Y
-	if absY < 0 {
-		absY = -absY
+	if dy < 0 {
+		dy = -dy
 	}
-	return float64(absX + absY)
+	return float64(dx + dy)
 }
 
-// MapTiles allows the access to a tile based on the point used
-func MapTiles(tiles []*Tile) map[image.Point]*Tile {
-	tileMap := make(map[image.Point]*Tile)
-	for _, tile := range tiles {
-		tileMap[tile.Coords] = tile
+// Path finds an A* route between two tiles belonging to this grid.
+func (g *Grid) Path(start, goal *Tile) ([]*Tile, error) {
+	if g == nil || start == nil || goal == nil {
+		return nil, errors.New("path start and goal must both exist")
 	}
-	return tileMap
-}
-
-// GetPath uses A* pathfinding to get the best route from one tile to another
-func GetPath(a *Tile, b *Tile) ([]*Tile, error) {
-	fmt.Println(a, "2:", b)
-	path, _, found := astar.Path(a, b)
+	if start.grid != g || goal.grid != g {
+		return nil, errors.New("path start and goal must belong to the same grid")
+	}
+	if start.Cost >= blockedTileCost {
+		return nil, errors.New("path start is blocked")
+	}
+	if goal.Cost >= blockedTileCost {
+		return nil, errors.New("path goal is blocked")
+	}
+	if start == goal {
+		return []*Tile{start}, nil
+	}
+	rawPath, _, found := astar.Path(start, goal)
 	if !found {
-		return nil, errors.New("failed to find route")
+		return nil, errors.New("failed to find a walkable route")
 	}
-	var tempTiles []*Tile
-	for _, pather := range path {
-		tile := pather.(*Tile)
+	path := make([]*Tile, 0, len(rawPath))
+	for _, node := range rawPath {
+		tile, ok := node.(*Tile)
+		if !ok || tile == nil {
+			return nil, errors.New("A* returned an unexpected path node")
+		}
 		tile.Color = params.PathColor
-		tempTiles = append(tempTiles, tile)
+		path = append(path, tile)
 	}
-	return tempTiles, nil
+	return path, nil
 }
 
-// GetGoal returns the tile that the pathfinding should aim for
-func GetGoal() *Tile {
-	middlePoint := image.Point{columns - 1, (rows - 1) / 2}
-	return tileMap[middlePoint] // The tile to the far right middle
-}
-
-// GetCurrentTile finds the tile that a point is in the most
-func GetCurrentTile(fPoint image.Point) *Tile {
-
-	var smallest *Tile
-	var smallSize int
-
-	// Calculate the smallest rectangle containing Frisk and the nearest tile
-	for i, tile := range tiles {
-		fRect := image.Rect(fPoint.X, fPoint.Y, fPoint.X+1, fPoint.Y+1)
-		unionRect := tile.Rectangle.Union(fRect)
-		averageSize := rect.AverageSize(unionRect)
-		if i == 0 {
-			smallest = tile
-			smallSize = averageSize
-		} else {
-			if averageSize < smallSize {
-				smallSize = averageSize
-				smallest = tile
-			}
+// MapTiles is retained for compatibility with callers of the old helper.
+func MapTiles(tiles []*Tile) map[image.Point]*Tile {
+	result := make(map[image.Point]*Tile, len(tiles))
+	for _, tile := range tiles {
+		if tile != nil {
+			result[tile.Coords] = tile
 		}
 	}
-	//fmt.Println(smallest)
-	smallest.Color = color.RGBA{22, 193, 0, 255}
-	return smallest
+	return result
+}
+
+// Legacy helpers operate on the most recently created grid. New code should
+// keep and use the Grid value returned by NewGrid instead.
+var defaultGrid *Grid
+
+func MakeTiles(img image.RGBA) ([]*Tile, error) {
+	grid, err := NewGrid(&img, params.TileSize)
+	if err != nil {
+		return nil, err
+	}
+	defaultGrid = grid
+	return grid.Tiles, nil
+}
+
+func GetGoal() *Tile {
+	if defaultGrid == nil {
+		return nil
+	}
+	return defaultGrid.RightEdgeGoal()
+}
+
+func GetCurrentTile(point image.Point) *Tile {
+	if defaultGrid == nil {
+		return nil
+	}
+	return defaultGrid.ClosestWalkableTile(point)
+}
+
+func GetPath(start, goal *Tile) ([]*Tile, error) {
+	if start == nil || start.grid == nil {
+		return nil, errors.New("path start tile is not initialized")
+	}
+	return start.grid.Path(start, goal)
 }
