@@ -311,7 +311,7 @@ jobs:
             $source = Join-Path $mingwBin $name
             if (Test-Path $source) { Copy-Item $source -Destination dist -Force }
           }
-          foreach ($required in @('opencv_core342.dll','libstdc++-6.dll','libgcc_s_seh-1.dll','libwinpthread-1.dll')) {
+          foreach ($required in @('libopencv_core342.dll','libstdc++-6.dll','libgcc_s_seh-1.dll','libwinpthread-1.dll')) {
             if (-not (Test-Path (Join-Path dist $required))) {
               throw "Required runtime DLL was not bundled: $required"
             }
