@@ -54,7 +54,7 @@ Undyne's letter to Alphys, completing the Alphys date, and progressing through
 the True Lab. These are progression facts, not yet an automated quest/flag
 tracker in Underbot.
 
-The route policy is not connected to keyboard input yet. It deliberately does
+The route policy is only partially connected to menu navigation: `BattleMenuUpdate` now selects the ACT slot in the standard four-option horizontal battle menu and deliberately does not confirm it. The ACT submenu, individual ACT choices, and MERCY availability are not recognized yet. The route logic deliberately does
 not guess ACT sequences, MERCY timing, ratings, or encounter identity. The
 caller must verify the encounter and game phase before acting; uncertain states
 must remain idle. A FIGHT timing-bar recognizer is also not implemented, and
