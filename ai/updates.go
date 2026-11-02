@@ -94,11 +94,15 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		chooseMercy := pacifistMainMenuTurns%2 == 1
 		targetIndex = pacifistOptionIndex(len(options), chooseMercy)
 	}
-	target := rect.RectangleCenter(options[targetIndex].Parent.Bounds)
 	player := rect.RectangleCenter(heart.Bounds)
-
-	if abs(player.X-target.X) > 5 || abs(player.Y-target.Y) > 5 {
-		direction := movementDirection(player, target)
+	selectedIndex := closestMenuOptionIndex(options, player)
+	if selectedIndex < 0 {
+		return nil
+	}
+	if selectedIndex != targetIndex {
+		current := rect.RectangleCenter(options[selectedIndex].Parent.Bounds)
+		target := rect.RectangleCenter(options[targetIndex].Parent.Bounds)
+		direction := movementDirection(current, target)
 		if direction != "" {
 			if err := win.Press(direction); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("couldn't move the menu cursor %s", direction))
