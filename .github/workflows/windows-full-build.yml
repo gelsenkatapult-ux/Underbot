@@ -231,6 +231,15 @@ jobs:
           $required = @('C:\opencv\build\install\include\opencv2\core.hpp','C:\opencv\build\install\x64\mingw\lib\libopencv_core342.dll.a','C:\opencv\build\install\x64\mingw\bin\libopencv_core342.dll')
           foreach ($file in $required) { if (-not (Test-Path $file)) { throw "Missing OpenCV build output: $file" } }
 
+      - name: Save OpenCV and MinGW build cache
+        if: steps.opencv-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            C:\\mingw
+            C:\\opencv\\build\\install
+          key: opencv-342-mingw63-x64-v2
+
       - name: Set native compiler and OpenCV runtime path
         shell: pwsh
         run: |
