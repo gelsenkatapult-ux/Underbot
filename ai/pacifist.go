@@ -14,8 +14,9 @@ var PacifistMode = true
 // These counters are updated by the game-state loop; a short cooldown prevents
 // the same visible menu entry from being confirmed repeatedly every frame.
 var (
-	pacifistMainMenuTurns  int
+	pacifistMainMenuTurns    int
 	battleMenuCooldownFrames int
+	pacifistSubmenuPending   bool
 )
 
 func pacifistOptionIndex(optionCount int, chooseMercy bool) int {
@@ -29,7 +30,7 @@ func pacifistOptionIndex(optionCount int, chooseMercy bool) int {
 }
 
 func isMainBattleMenu(options []object.RecognizedObject) bool {
-	if len(options) < 2 || len(options) > 4 {
+	if len(options) != 4 {
 		return false
 	}
 	minY := options[0].Parent.Bounds.Min.Y + options[0].Parent.Bounds.Dy()/2
