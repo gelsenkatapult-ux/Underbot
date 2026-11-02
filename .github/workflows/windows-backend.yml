@@ -1,0 +1,29 @@
+name: Windows backend build
+
+on:
+  push:
+    branches: [windows-port]
+  pull_request:
+    branches: [windows-port]
+  workflow_dispatch:
+
+jobs:
+  windows-backend:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache: true
+      - name: Download backend dependency
+        run: go mod download github.com/pkg/errors
+      - name: Compile native Windows backend
+        shell: pwsh
+        run: |
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'amd64'
+          $env:CGO_ENABLED = '0'
+          go build -v ./sys/Impl ./winmanage
