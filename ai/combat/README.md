@@ -32,3 +32,30 @@ Primary references:
 The current legacy CV pipeline recognizes a small set of sprites and the SOUL;
 it does not yet expose a projectile tracker. This package is therefore a tested
 foundation, not a claim that autonomous dodging is already integrated.
+
+## True Pacifist route policy
+
+`route.go` adds a conservative, data-only route policy:
+
+- Ordinary encounters and Toriel, Papyrus and Undyne prefer encounter-specific
+  ACT/MERCY resolution. The policy does not authorize FIGHT for them.
+- Mettaton EX is resolved through the peaceful ratings threshold. The yellow
+  phone/shooter mechanic is only appropriate when its phase is recognized.
+- Asgore and Omega Flowey are explicit progression exceptions for the required
+  Neutral completion; those boss encounters do not award EXP.
+- Asriel uses the SAVE/Lost Souls progression, not an ordinary attack strategy.
+- Unknown encounter identities return no action and require human review.
+
+True Pacifist is not available until a Neutral ending has been completed on the
+save. The route also depends on keeping EXP at zero, completing Papyrus's
+hangout, giving water to Undyne immediately after her collapse, completing
+Undyne's hangout, reaching Mettaton EX's peaceful ratings ending, delivering
+Undyne's letter to Alphys, completing the Alphys date, and progressing through
+the True Lab. These are progression facts, not yet an automated quest/flag
+tracker in Underbot.
+
+The route policy is not connected to keyboard input yet. It deliberately does
+not guess ACT sequences, MERCY timing, ratings, or encounter identity. The
+caller must verify the encounter and game phase before acting; uncertain states
+must remain idle. A FIGHT timing-bar recognizer is also not implemented, and
+the route policy does not need it for ordinary encounters.
