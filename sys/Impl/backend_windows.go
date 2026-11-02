@@ -107,7 +107,9 @@ func (w window) valid() error {
 func (w window) Center() (image.Point, error) {
 	x, y, err := w.originAndSize()
 	if err != nil { return image.Point{}, err }
-	return image.Pt(x+wWidth(w)/2, y+wHeight(w)/2), nil
+	width, height, err := w.dimensions()
+	if err != nil { return image.Point{}, err }
+	return image.Pt(x+width/2, y+height/2), nil
 }
 
 func (w window) originAndSize() (int, int, error) {
@@ -128,9 +130,6 @@ func (w window) dimensions() (int, int, error) {
 	if width <= 0 || height <= 0 { return 0, 0, errors.New("window has an empty client area") }
 	return width, height, nil
 }
-func wWidth(w window) int { x, _, err := w.dimensions(); if err != nil { return 0 }; return x }
-func wHeight(w window) int { _, y, err := w.dimensions(); if err != nil { return 0 }; return y }
-
 func (w window) WxH() (int, int, error) { return w.dimensions() }
 
 func (w window) GetImage() (image.RGBA, error) {
@@ -229,15 +228,13 @@ func (w window) ID() (int, error) {
 
 // FindWindowByTitle is a helper for the Windows backend and is also used by winmanage.
 func FindWindowByTitle(title string) (sys.Window, error) {
-	wanted, err := syscall.UTF16PtrFromString(title)
-	if err != nil { return nil, err }
 	var found uintptr
 	cb := syscall.NewCallback(func(hwnd uintptr, lparam uintptr) uintptr {
 		n, _, _ := procGetWindowTextLengthW.Call(hwnd)
 		if n == 0 { return 1 }
 		buf := make([]uint16, int(n)+1)
 		procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-		if syscall.UTF16ToString(buf) == syscall.UTF16ToString(unsafe.Slice(wanted, len(syscall.StringToUTF16(title)))) {
+		if syscall.UTF16ToString(buf) == title {
 			found = hwnd
 			return 0
 		}
