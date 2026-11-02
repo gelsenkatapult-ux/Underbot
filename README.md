@@ -62,7 +62,7 @@ or completion of its game-playing logic. The original AI remains a prototype:
 outside battle it calculates a path but its movement-execution loop is still
 commented out; during enemy attack phases it builds the tile view but does not
 yet implement the movement/dodge controller. Battle interaction is limited to
-the original menu/dialogue/save handling.
+basic Fight-menu selection and dialogue/save keypresses; ACT/MERCY decisions, attack timing and bullet-hell dodging are not implemented.
 
 For that reason, a successful Windows build or backend smoke test must not be
 interpreted as proof that the bot can complete an entire Undertale run. This
