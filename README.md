@@ -29,4 +29,27 @@ go build -o Underbot-Windows-BackendCheck.exe ./cmd/winbackendcheck
 
 The diagnostic looks for the Undertale window (default title: `UNDERTALE`), captures its visible client area, and writes `underbot-window-test.png`. The game must be visible and in the foreground; this desktop capture does not read obscured or minimized windows. An optional exact window title can be passed as the first argument.
 
-The full application build will require a matching GoCV/OpenCV installation and a CGO-capable Windows compiler. See the [GoCV Windows installation guide](https://gocv.io/getting-started/windows/) for the native OpenCV toolchain.
+The full application uses the same legacy dependency set as the original project. In particular, `Gopkg.lock` pins GoCV to the July 2018 v0.14.0 source revision, whose Windows cgo file expects **OpenCV 3.4.2** and MinGW libraries with the `342` suffix. Do not install a newer OpenCV release for this pinned GoCV revision.
+
+To prepare a Windows machine for the original application:
+
+1. Install 64-bit MinGW-w64 with POSIX threads and SEH exceptions. The original GoCV 0.14.0 Windows instructions were written for MinGW-w64 7.x (the 7.3.0 toolchain was used in the historical setup).
+2. Install CMake.
+3. Check out the exact GoCV source revision used by the original lock file and build its matching OpenCV version:
+
+   ```powershell
+   git clone https://github.com/hybridgroup/gocv.git
+   cd gocv
+   git checkout 0d9b22a6450a7d81761a4b763f58fb99e962ab47
+   .\win_build_opencv.cmd
+   ```
+
+4. Add `C:\opencv\build\install\x64\mingw\bin` and the MinGW `bin` directory to the Windows `PATH`. The pinned GoCV cgo configuration expects OpenCV headers under `C:\opencv\build\install\include` and libraries under `C:\opencv\build\install\x64\mingw\lib`.
+5. From the Underbot repository root, download the pinned Go modules and build the original GUI:
+
+   ```powershell
+   go mod download
+   go build -o Underbot.exe .
+   ```
+
+This Windows GUI build is not yet verified in CI because it needs the matching native OpenCV 3.4.2 libraries and a CGO-capable MinGW compiler. The automated workflow currently verifies the Win32 backend and its diagnostic tool, not the complete GUI. The current GoCV Windows installation page describes a newer GoCV/OpenCV combination; use it only as general toolchain background, not as a replacement for the versions pinned by this original source tree.
