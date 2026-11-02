@@ -47,13 +47,10 @@ func addToColor() {
 }
 
 func randomColor(i int) color.Color {
-	if i < 0 {
-		i = 0
-	}
-	// Scenes can contain more objects than the initial debug-color pool.
-	// Grow it instead of indexing past the end and crashing the CV loop.
-	for len(colors) <= i {
-		addToColor()
+	// In case there aren't enough colors, just make a not very random color instead on the spot quickly
+	if len(colors) < i {
+		index := len(colors) - 1
+		return color.RGBA{colors[index][0], colors[index/2][1], colors[index/3][2], 255}
 	}
 	return color.RGBA{colors[i][0], colors[i][1], colors[i][2], 255}
 }
@@ -116,10 +113,7 @@ func ProcessImage(img *image.RGBA, win sys.Window) error {
 		}
 
 		// Gets surrounding rectangle of object
-		rec := rect.GetRectangle(obj).Intersect(img.Bounds())
-		if rec.Empty() {
-			continue
-		}
+		rec := rect.GetRectangle(obj)
 
 		// The color the surrounding rectangle should have
 		var dispColor color.Color
