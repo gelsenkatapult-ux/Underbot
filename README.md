@@ -70,9 +70,10 @@ prototype AI:
   applies a reactive dodge heuristic for red/blue souls. For green souls it
   turns the shield toward the nearest detected hazard.
 - Pacifist mode is enabled by default. The four-button battle menu is ordered
-  by screen position; ACT is preferred until MERCY is highlighted yellow.
-  The automatic fight-timing confirmation is disabled in this mode, and
-  unknown-state recovery only presses directional keys.
+  by screen position; the bot alternates ACT turns with attempts to Spare.
+  Text-only submenus confirm their first entry (the default Spare entry in the
+  Mercy submenu). The automatic fight-timing confirmation is disabled in this
+  mode, and unknown-state recovery only presses directional keys.
 
 These behaviours are deliberately conservative prototypes, not a certified
 playthrough system. Projectile detection can miss attacks or mistake visual
