@@ -28,10 +28,9 @@ func genUpdate() {
 	}
 }
 
-// BattleMenuUpdate selects a non-violent action by default. On the main
-// four-button menu it selects ACT, unless MERCY is visibly yellow (spareable).
-// In a smaller ACT submenu it chooses the first listed option. This is a
-// conservative generic policy; enemy-specific ACT choices are not inferred.
+// BattleMenuUpdate only acts on a fully recognized four-button main menu or
+// on a submenu that this pacifist controller opened itself. It alternates ACT
+// turns with Spare attempts; unrecognized menus are left untouched.
 func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
 	genUpdate()
 	if PacifistMode && battleMenuCooldownFrames > 0 {
@@ -57,13 +56,13 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		return nil
 	}
 	if len(options) == 0 {
-		// Mercy/ACT submenus may be text-only and therefore have no button
-		// contours. Confirm their default first entry (Spare in MERCY) once,
-		// with a cooldown to avoid holding Z through the following attack.
-		if PacifistMode {
+		// Some ACT/MERCY submenu entries are text-only. Confirm their first
+		// entry only when this controller just opened that submenu itself.
+		if PacifistMode && pacifistSubmenuPending {
 			if err := win.Press("z"); err != nil {
-				return errors.Wrap(err, "couldn't confirm the first non-violent submenu entry")
+				return errors.Wrap(err, "couldn't confirm the expected non-violent submenu entry")
 			}
+			pacifistSubmenuPending = false
 			battleMenuCooldownFrames = 25
 		}
 		return nil
@@ -81,6 +80,11 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 	})
 
 	mainMenu := isMainBattleMenu(options)
+	if PacifistMode && !mainMenu && !pacifistSubmenuPending {
+		// A partial/unrecognized menu must never be confirmed: it may be the
+		// Fight button with three other contours missed by the CV detector.
+		return nil
+	}
 	targetIndex := 0
 	if PacifistMode && mainMenu {
 		// Alternate between ACT and a Spare attempt. This makes progress on
@@ -107,6 +111,9 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		battleMenuCooldownFrames = 25
 		if mainMenu {
 			pacifistMainMenuTurns++
+			pacifistSubmenuPending = true
+		} else {
+			pacifistSubmenuPending = false
 		}
 	}
 	return nil
@@ -265,6 +272,7 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	genUpdate()
 	pacifistMainMenuTurns = 0
 	battleMenuCooldownFrames = 0
+	pacifistSubmenuPending = false
 	friskObjects, _ := GetWanted(objects, object.Frisk)
 	if len(friskObjects) == 0 {
 		failedRetrieval++
