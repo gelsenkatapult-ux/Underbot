@@ -86,13 +86,9 @@ func TruePacifistDecision(encounter EncounterKind) RouteDecision {
 	}
 }
 
-// CanUseFightForRoute prevents an ordinary FIGHT command from being selected
-// by the True Pacifist policy. Boss progression exceptions must still be
-// gated by a verified encounter state in the caller.
+// CanUseFightForRoute is a stateless compatibility guard. It always fails
+// closed because it cannot verify EXP or whether the Neutral ending was seen.
+// New controller code must call CanUseFightForProgress with a verified snapshot.
 func CanUseFightForRoute(mode RouteMode, encounter EncounterKind) bool {
-	if mode != RouteTruePacifist {
-		return false
-	}
-	decision := TruePacifistDecision(encounter)
-	return decision.AllowFight
+	return false
 }
