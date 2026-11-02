@@ -18,7 +18,10 @@ const (
 // AttackIntent converts documented contact semantics into a safe high-level
 // intent. Unknown colors never become dodge commands by default.
 func AttackIntent(mode SoulMode, class AttackClass) CombatIntent {
-	if mode == SoulGreen && class == AttackWhite {\n\t\treturn IntentShield\n\t}\n\tswitch ClassRule(class) {
+	if mode == SoulGreen && class == AttackWhite {
+		return IntentShield
+	}
+	switch ClassRule(class) {
 	case RuleDodge:
 		return IntentDodge
 	case RuleStayStill:
@@ -26,9 +29,6 @@ func AttackIntent(mode SoulMode, class AttackClass) CombatIntent {
 	case RuleKeepMoving:
 		return IntentKeepMoving
 	case RuleCollect:
-		if mode == SoulGreen {
-			return IntentShield
-		}
 		return IntentCollect
 	case RuleShield:
 		return IntentShield
