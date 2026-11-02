@@ -51,6 +51,7 @@ var (
 
 const (
 	swRestore       = 9
+	swpNoMove       = 0x0002
 	swpNoZOrder     = 0x0004
 	swpNoActivate   = 0x0010
 	srccopy         = 0x00CC0020
@@ -240,7 +241,7 @@ func (w window) Resize(width, height int) error {
 	)
 	if ok == 0 { return fmt.Errorf("AdjustWindowRectEx failed: %v", callErr) }
 	outerWidth, outerHeight := int(r.Right-r.Left), int(r.Bottom-r.Top)
-	ok, _, callErr = procSetWindowPos.Call(w.hwnd, 0, 0, 0, uintptr(outerWidth), uintptr(outerHeight), swpNoZOrder|swpNoActivate)
+	ok, _, callErr = procSetWindowPos.Call(w.hwnd, 0, 0, 0, uintptr(outerWidth), uintptr(outerHeight), swpNoMove|swpNoZOrder|swpNoActivate)
 	if ok == 0 { return fmt.Errorf("SetWindowPos failed: %v", callErr) }
 	return nil
 }
