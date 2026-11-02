@@ -227,7 +227,11 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	// Calculate which tile Frisk is in
 
 	currentTile := pathfinding.GetCurrentTile(image.Point{averageX, averageY})
-	path, err := pathfinding.GetPath(currentTile, pathfinding.GetGoal())
+	goalTile := pathfinding.GetGoal()
+	if currentTile == nil || goalTile == nil {
+		return nil // Wait for a usable player position and walkable exit tile.
+	}
+	path, err := pathfinding.GetPath(currentTile, goalTile)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate path")
 	}
