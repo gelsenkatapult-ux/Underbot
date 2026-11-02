@@ -60,11 +60,11 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 	if len(options) == 0 {
 		// Some ACT/MERCY submenu entries are text-only. Confirm their first
 		// entry only when this controller just opened that submenu itself.
-		if PacifistMode && pacifistSubmenuPending {
+		if PacifistMode && pacifistSubmenuStepsRemaining > 0 {
 			if err := win.Press("z"); err != nil {
 				return errors.Wrap(err, "couldn't confirm the expected non-violent submenu entry")
 			}
-			pacifistSubmenuPending = false
+			pacifistSubmenuStepsRemaining--
 			battleMenuCooldownFrames = 25
 		}
 		return nil
@@ -82,7 +82,7 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 	})
 
 	mainMenu := isMainBattleMenu(options)
-	if PacifistMode && !mainMenu && !pacifistSubmenuPending {
+	if PacifistMode && !mainMenu && pacifistSubmenuStepsRemaining == 0 {
 		// A partial/unrecognized menu must never be confirmed: it may be the
 		// Fight button with three other contours missed by the CV detector.
 		return nil
@@ -113,9 +113,9 @@ func BattleMenuUpdate(objects []object.Object, win sys.Window, img *image.RGBA) 
 		battleMenuCooldownFrames = 25
 		if mainMenu {
 			pacifistMainMenuTurns++
-			pacifistSubmenuPending = true
+			pacifistSubmenuStepsRemaining = 2
 		} else {
-			pacifistSubmenuPending = false
+			pacifistSubmenuStepsRemaining--
 		}
 	}
 	return nil
@@ -274,7 +274,7 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	genUpdate()
 	pacifistMainMenuTurns = 0
 	battleMenuCooldownFrames = 0
-	pacifistSubmenuPending = false
+	pacifistSubmenuStepsRemaining = 0
 	friskObjects, _ := GetWanted(objects, object.Frisk)
 	if len(friskObjects) == 0 {
 		failedRetrieval++
