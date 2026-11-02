@@ -9,6 +9,25 @@ import (
 	"gitlab.com/256/Underbot/cv/object"
 )
 
+func TestIsMainBattleMenuUsesHorizontalFourButtonLayout(t *testing.T) {
+	options := []object.RecognizedObject{
+		{Parent: &object.Object{Bounds: image.Rect(10, 10, 117, 49)}},
+		{Parent: &object.Object{Bounds: image.Rect(150, 11, 257, 50)}},
+		{Parent: &object.Object{Bounds: image.Rect(290, 9, 397, 48)}},
+		{Parent: &object.Object{Bounds: image.Rect(430, 10, 537, 49)}},
+	}
+	if !isMainBattleMenu(options) {
+		t.Fatal("four buttons on one baseline were not identified as the main menu")
+	}
+	options[2].Parent.Bounds = image.Rect(290, 70, 397, 109)
+	if isMainBattleMenu(options) {
+		t.Fatal("vertically arranged options were incorrectly identified as the main menu")
+	}
+	if isMainBattleMenu(options[:2]) {
+		t.Fatal("two ACT submenu options were incorrectly identified as the main menu")
+	}
+}
+
 func TestPacifistOptionIndex(t *testing.T) {
 	tests := []struct {
 		name             string
