@@ -7,7 +7,10 @@ This package provides a pure-Go first step toward real-time combat movement.
 - Tracks estimate horizontal and vertical velocity in pixels per second.
 - `ProjectileTrack.Predict` extrapolates a short, constant-velocity trajectory.
 - `ChooseDodge` evaluates nine short movement candidates against predicted
-  projectile rectangles and a player safety margin.
+  **white damaging attacks** and a player safety margin. It deliberately does
+  not treat every colored object as a generic collision hazard: gray is harmless,
+  light-blue requires staying still, green is an interaction mechanic, orange
+  requires movement, yellow is a shooter mechanic, and red is a warning class.
 
 ## Integration contract
 
@@ -19,7 +22,11 @@ box. Do not feed every contour into this tracker as if it were a projectile.
 The planner is intentionally independent of Win32 input and does not press
 keys. The combat controller must additionally enforce SOUL mode constraints
 (red free movement, blue gravity, green shield, yellow shooter, purple rails),
-movement speed, attack-class rules, and game-specific board geometry.
+movement speed, attack-class rules, and game-specific board geometry. The current
+planner only handles white attacks; it does not yet implement the required
+stay-still response for light-blue, keep-moving response for orange, collection
+or shield interaction for green, or shooting for yellow. Those classes are
+intentionally not converted into generic dodge movements.
 
 Constant-velocity extrapolation is only a short-horizon approximation. It is
 not suitable by itself for homing, curved, accelerating, rotating, or beam
