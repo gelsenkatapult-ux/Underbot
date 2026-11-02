@@ -87,7 +87,7 @@ func TestBattleMenuSelectsACTWhenMercyIsNotHighlighted(t *testing.T) {
 		menuObject(2, "battleOption", image.Rect(150, 10, 257, 49)),
 		menuObject(3, "battleOption", image.Rect(290, 10, 397, 49)),
 		menuObject(4, "battleOption", image.Rect(430, 10, 537, 49)),
-		menuObject(5, "redHeart", image.Rect(190, 20, 205, 35)),
+		menuObject(5, "redHeart", image.Rect(198, 22, 213, 37)),
 	}
 	window := &pacifistTestWindow{}
 	if err := BattleMenuUpdate(objects, window, image.NewRGBA(image.Rect(0, 0, 640, 480))); err != nil {
