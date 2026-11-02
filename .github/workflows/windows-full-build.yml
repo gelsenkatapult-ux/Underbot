@@ -29,7 +29,7 @@ jobs:
 
       - name: Restore OpenCV 3.4.2 build
         id: opencv-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             C:\mingw
