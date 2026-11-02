@@ -29,6 +29,34 @@ func pacifistOptionIndex(optionCount int, chooseMercy bool) int {
 	return 0
 }
 
+// closestMenuOptionIndex returns the menu button nearest the soul cursor.
+// Undertale's red heart marks a selection from the side, so it should not be
+// required to overlap the visual centre of the button.
+func closestMenuOptionIndex(options []object.RecognizedObject, cursor image.Point) int {
+	if len(options) == 0 {
+		return -1
+	}
+	bestIndex := -1
+	bestDistance := int(^uint(0) >> 1)
+	for i, option := range options {
+		if option.Parent == nil {
+			continue
+		}
+		center := image.Pt(
+			option.Parent.Bounds.Min.X+option.Parent.Bounds.Dx()/2,
+			option.Parent.Bounds.Min.Y+option.Parent.Bounds.Dy()/2,
+		)
+		dx := center.X - cursor.X
+		dy := center.Y - cursor.Y
+		distance := dx*dx + dy*dy
+		if distance < bestDistance {
+			bestDistance = distance
+			bestIndex = i
+		}
+	}
+	return bestIndex
+}
+
 func isMainBattleMenu(options []object.RecognizedObject) bool {
 	if len(options) != 4 {
 		return false
