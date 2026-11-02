@@ -36,3 +36,16 @@ Constant-velocity extrapolation is only a short-horizon approximation. It is
 not suitable by itself for homing, curved, accelerating, rotating, or beam
 attacks. Such patterns need their own motion model and must be identified from
 multiple observed frames before being used for autonomous dodging.
+
+## Semantic combat intents
+
+`AttackIntent` maps the documented attack-color rule and detected SOUL mode
+to a high-level intent (dodge, stay still, keep moving, collect/interact,
+shield, shoot, warning, or no action). It never emits keyboard input. Unknown
+attack classes resolve to no action rather than an assumed dodge.
+
+The current legacy recognizer only identifies red, blue, and green SOULs.
+Yellow-shooter and purple-rail modes are represented in the model but are not
+yet detected by the image pipeline. The intent rules are unit-tested but are
+not yet wired to an autonomous combat controller. In particular, blue gravity
+movement needs a calibrated jump/landing model before it can be automated.
