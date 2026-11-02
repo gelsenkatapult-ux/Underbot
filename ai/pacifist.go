@@ -16,7 +16,7 @@ var PacifistMode = true
 var (
 	pacifistMainMenuTurns    int
 	battleMenuCooldownFrames int
-	pacifistSubmenuPending   bool
+	pacifistSubmenuStepsRemaining int
 )
 
 func pacifistOptionIndex(optionCount int, chooseMercy bool) int {
