@@ -57,3 +57,30 @@ func TestChooseDodgeRejectsInvalidGeometry(t *testing.T) {
 		t.Fatal("empty player rectangle must be rejected")
 	}
 }
+
+func TestChooseDodgeDoesNotTreatOtherAttackClassesAsWhiteHazards(t *testing.T) {
+	player := image.Rect(45, 45, 55, 55)
+	board := image.Rect(0, 0, 100, 100)
+	classes := []AttackClass{AttackGray, AttackRed, AttackGreen, AttackLightBlue, AttackOrange, AttackYellow}
+	for _, class := range classes {
+		tracks := []ProjectileTrack{{
+			Bounds: image.Rect(45, 10, 55, 20), VelocityY: 100, Class: class,
+		}}
+		move, ok := ChooseDodge(player, board, tracks, 400*time.Millisecond, 2)
+		if !ok { t.Fatalf("class %q: expected a valid conservative candidate", class) }
+		if move != (image.Point{}) {
+			t.Errorf("class %q caused generic dodge %v; class-specific behavior is required", class, move)
+		}
+	}
+}
+
+func TestChooseDodgeStillAvoidsWhiteAttacks(t *testing.T) {
+	player := image.Rect(45, 45, 55, 55)
+	board := image.Rect(0, 0, 100, 100)
+	tracks := []ProjectileTrack{{
+		Bounds: image.Rect(45, 10, 55, 20), VelocityY: 100, Class: AttackWhite,
+	}}
+	move, ok := ChooseDodge(player, board, tracks, 400*time.Millisecond, 2)
+	if !ok { t.Fatal("expected a safe candidate") }
+	if move == (image.Point{}) { t.Fatal("white damaging attack should trigger an evasive candidate") }
+}
