@@ -2,7 +2,7 @@ package combat
 
 import (
 	"image"
-\t"time"
+	"time"
 
 	"gitlab.com/256/Underbot/cv/object"
 )
