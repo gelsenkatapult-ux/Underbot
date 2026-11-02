@@ -323,13 +323,17 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	return nil
 }
 
-// unstuck will do keypresses that attempt to get the game to a state that can be detected properly
+// unstuck performs a cautious directional nudge. It never presses Z or Enter,
+// because an unknown state may be a battle menu and random confirmation could
+// accidentally select FIGHT in a pacifist run.
+var unstuckDirectionIndex int
+
 func unstuck(win sys.Window) error {
-	keys := []string{"z", "x", "up", "left", "right", "down", "enter"}
-	randKey := keys[rand.Intn(len(keys))]
-	err := win.Press(randKey)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to press %s key", randKey))
+	keys := []string{"up", "right", "down", "left"}
+	key := keys[unstuckDirectionIndex%len(keys)]
+	unstuckDirectionIndex++
+	if err := win.Press(key); err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed to press %s while recovering", key))
 	}
 	return nil
 }
@@ -339,14 +343,13 @@ var unknownFrames int
 
 // UnknownUpdate is the update function that just calls unstuck
 func UnknownUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error {
-	// Stall until items can be found
 	unknownFrames++
-	// If stalling takes too long, then try to get unstuck
-	if unknownFrames > params.FailedLimit {
-		fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-		err := unstuck(win)
-		if err != nil {
-			return errors.Wrap(err, "failed to try to get unstuck")
+	if unknownFrames == params.FailedLimit+1 {
+		fmt.Println("The AI cannot identify the current game screen. It will only try directional recovery inputs.")
+	}
+	if unknownFrames > params.FailedLimit && (unknownFrames-params.FailedLimit)%15 == 0 {
+		if err := unstuck(win); err != nil {
+			return errors.Wrap(err, "failed to try directional recovery")
 		}
 	}
 	return nil
