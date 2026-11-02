@@ -24,5 +24,5 @@ func TestDrawRectangleRespectsHalfOpenBounds(t *testing.T) {
 	DrawRectangle(img, color.White, image.Rect(1, 1, 3, 3))
 	if got := img.RGBAAt(3, 2); got != (color.RGBA{}) { t.Fatalf("pixel outside rectangle was drawn: %v", got) }
 	if got := img.RGBAAt(2, 2); got != (color.RGBA{}) { t.Fatalf("rectangle interior should remain untouched: %v", got) }
-	if got := img.RGBAAt(1, 1); got != color.White { t.Fatalf("rectangle border missing: %v", got) }
+	if got := img.RGBAAt(1, 1); got != (color.RGBA{R: 255, G: 255, B: 255, A: 255}) { t.Fatalf("rectangle border missing: %v", got) }
 }
