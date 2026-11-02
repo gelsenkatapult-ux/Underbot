@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math/rand"
 	"time"
 
 	"github.com/pkg/errors"
@@ -103,9 +102,8 @@ func InBattleUpdate(objects []object.Object, win sys.Window, img *image.RGBA) er
 		// Stall until items can be found
 		failedRetrieval++
 		// If stalling takes too long, then try to get unstuck
-		if failedRetrieval > params.FailedLimit {
-			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-			unstuck(win)
+		if failedRetrieval == params.FailedLimit+1 {
+			fmt.Println("The AI cannot identify the player or battle state; waiting for a clear frame.")
 		}
 		return nil
 	}
@@ -148,9 +146,8 @@ func SaveUpdate(objects []object.Object, win sys.Window, img *image.RGBA) error 
 	})
 	if err != nil {
 		failedRetrieval++
-		if failedRetrieval > params.FailedLimit {
-			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-			return unstuck(win)
+		if failedRetrieval == params.FailedLimit+1 {
+			fmt.Println("The AI cannot identify the save screen; waiting for a clear frame.")
 		}
 		return nil
 	}
@@ -195,9 +192,8 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 		// Stall until items can be found
 		failedRetrieval++
 		// If stalling takes too long, then try to get unstuck
-		if failedRetrieval > params.FailedLimit {
-			fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-			unstuck(win)
+		if failedRetrieval == params.FailedLimit+1 {
+			fmt.Println("The AI cannot identify the player or battle state; waiting for a clear frame.")
 		}
 		return nil
 	}
@@ -260,14 +256,9 @@ func OutsideBattleUpdate(objects []object.Object, win sys.Window, img *image.RGB
 	return nil
 }
 
-// unstuck will do keypresses that attempt to get the game to a state that can be detected properly
+// unstuck deliberately avoids arbitrary keypresses. Random inputs can confirm a
+// destructive menu choice or walk Frisk into danger, so wait for recognition instead.
 func unstuck(win sys.Window) error {
-	keys := []string{"z", "x", "up", "left", "right", "down", "enter"}
-	randKey := keys[rand.Intn(len(keys))]
-	err := win.Press(randKey)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to press %s key", randKey))
-	}
 	return nil
 }
 
@@ -279,12 +270,8 @@ func UnknownUpdate(objects []object.Object, win sys.Window, img *image.RGBA) err
 	// Stall until items can be found
 	unknownFrames++
 	// If stalling takes too long, then try to get unstuck
-	if unknownFrames > params.FailedLimit {
-		fmt.Println("The AI is unsure about what is happening. Trying to get unstuck...")
-		err := unstuck(win)
-		if err != nil {
-			return errors.Wrap(err, "failed to try to get unstuck")
-		}
+	if unknownFrames == params.FailedLimit+1 {
+		fmt.Println("The AI cannot identify the current screen; automatic inputs are suspended.")
 	}
 	return nil
 }
